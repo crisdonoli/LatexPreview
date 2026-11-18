@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# ──────────────────────────────────────────────────────────────────
+# latex-overlay — Launcher/controller for the GTK LaTeX overlay daemon
+#
+# What it does:
+#   Kills any previous instance, spawns latex-overlay-gtk detached, records
+#   its PID, then applies Hyprland window rules if hyprctl is available.
+#
+# Usage:
+#   latex-overlay [args...]   # Restart the overlay, forwarding args to it
+#   latex-overlay stop        # Kill the running overlay and free the port
+#   latex-overlay status      # Print Running (PID: n) or Not running
+#
+# External dependencies:
+#   required: bash, coreutils, kill, fuser (psmisc), python3 (dev checkout)
+#   one of:   $out/bin/latex-overlay-gtk, ./latex-overlay-gtk.py, PATH binary
+#   optional: hyprctl (floating, resize, center, pin), notify-send (failures)
+#
+# Side effects:
+#   Writes the PID to /tmp/latex-overlay-server.pid and truncates/grows the
+#   log at $XDG_STATE_HOME/latex-overlay/launch.log (created if absent).
+#   Kills processes holding port 17832. Spawns a background GTK process.
+# ──────────────────────────────────────────────────────────────────
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+PORT=17832
+PID_FILE="/tmp/latex-overlay-server.pid"
+
+# Stops the recorded server process, clears the PID file and frees the port.
+stop_server() {
+  if [[ -f "${PID_FILE}" ]] && kill -0 "$(cat "${PID_FILE}")" 2>/dev/null; then
+    kill "$(cat "${PID_FILE}")" 2>/dev/null || true
+  fi
+  rm -f "${PID_FILE}"
+  fuser -k "${PORT}/tcp" 2>/dev/null || true
+  sleep 0.3
+}
+
+if [[ "${1:-}" == "stop" ]]; then
+  stop_server
+  echo "LaTeX overlay stopped."
+  exit 0
+fi
+
+if [[ "${1:-}" == "status" ]]; then
+  if [[ -f "${PID_FILE}" ]] && kill -0 "$(cat "${PID_FILE}")" 2>/dev/null; then
+    echo "Running (PID: $(cat "${PID_FILE}"))"
+  else
+    echo "Not running"
+  fi
+  exit 0
+fi
+
+stop_server
+
+# Installed layout: $out/bin/latex-overlay-gtk (makeWrapper).
+# Dev checkout: python3 latex-overlay-gtk.py next to this script.
+if [[ -x "${SCRIPT_DIR}/../../bin/latex-overlay-gtk" ]]; then
+  OVERLAY=("${SCRIPT_DIR}/../../bin/latex-overlay-gtk")
+elif [[ -f "${SCRIPT_DIR}/latex-overlay-gtk.py" ]]; then
+  OVERLAY=(python3 "${SCRIPT_DIR}/latex-overlay-gtk.py")
+else
+  OVERLAY=(latex-overlay-gtk)
+fi
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/latex-overlay"
+LOG_FILE="${STATE_DIR}/launch.log"
+mkdir -p "${STATE_DIR}"
+if [[ -f "${LOG_FILE}" ]]; then
+  tail -c 65536 "${LOG_FILE}" > "${LOG_FILE}.tmp" && mv "${LOG_FILE}.tmp" "${LOG_FILE}"
+fi
+
+"${OVERLAY[@]}" "$@" >>"${LOG_FILE}" 2>&1 &
+GTK_PID=$!
+echo "${GTK_PID}" > "${PID_FILE}"
+
+sleep 2
+if ! kill -0 "${GTK_PID}" 2>/dev/null; then
+  tail -n 40 "${LOG_FILE}" >&2
+  command -v notify-send >/dev/null 2>&1 && \
+    notify-send -u critical "latex-overlay" "No se pudo abrir. Ver ${LOG_FILE}"
+  exit 1
+fi
+
+# GTK maps its window asynchronously; retry until Hyprland sees the pid.
+if command -v hyprctl >/dev/null 2>&1; then
+  (
+    for _ in 1 2 3 4 5; do
+      sleep 0.4
+      hyprctl dispatch togglefloating "pid:${GTK_PID}" 2>/dev/null && break
+    done
+    sleep 0.2
+    hyprctl dispatch resizeactive exact 800 300 2>/dev/null || true
+    hyprctl dispatch centerwindow 2>/dev/null || true
+    hyprctl dispatch pin "pid:${GTK_PID}" 2>/dev/null || true
+  ) &
+fi
+
+exit 0

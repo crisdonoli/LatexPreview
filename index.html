@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LaTeX Preview</title>
+
+<!-- KaTeX CSS -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+
+<!-- Mermaid JS (diagram rendering) -->
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
+<style>
+  /* ── Catppuccin Mocha Palette ── */
+  :root {
+    --rosewater: #f5e0dc;
+    --flamingo:  #f2cdcd;
+    --pink:      #f5c2e7;
+    --mauve:     #cba6f7;
+    --red:       #f38ba8;
+    --maroon:    #eba0ac;
+    --peach:     #fab387;
+    --yellow:    #f9e2af;
+    --green:     #a6e3a1;
+    --teal:      #94e2d5;
+    --sky:       #89dceb;
+    --sapphire:  #74c7ec;
+    --blue:      #89b4fa;
+    --lavender:  #b4befe;
+    --text:      #cdd6f4;
+    --subtext1:  #bac2de;
+    --subtext0:  #a6adc8;
+    --overlay2:  #9399b2;
+    --overlay1:  #7f849c;
+    --overlay0:  #6c7086;
+    --surface2:  #585b70;
+    --surface1:  #45475a;
+    --surface0:  #313244;
+    --base:      #1e1e2e;
+    --mantle:    #181825;
+    --crust:     #11111b;
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    background-color: var(--base);
+    color: var(--text);
+    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', 'Consolas', monospace;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Header ── */
+  .header {
+    background-color: var(--surface0);
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--surface1);
+    flex-shrink: 0;
+  }
+
+  .header-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--blue);
+    letter-spacing: 0.5px;
+  }
+
+  .header-hint {
+    font-size: 11px;
+    color: var(--overlay0);
+  }
+
+  /* ── Main Layout ── */
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── Input Panel ── */
+  .input-panel {
+    width: 45%;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--surface1);
+  }
+
+  .input-label {
+    background-color: var(--mantle);
+    color: var(--green);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 6px 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 1px solid var(--surface1);
+  }
+
+  #latex-input {
+    flex: 1;
+    background-color: var(--crust);
+    color: var(--text);
+    border: none;
+    outline: none;
+    padding: 12px;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.6;
+    resize: none;
+    tab-size: 2;
+  }
+
+  #latex-input::placeholder {
+    color: var(--surface2);
+  }
+
+  #latex-input:focus {
+    background-color: var(--mantle);
+  }
+
+  /* ── Output Panel ── */
+  .output-panel {
+    width: 55%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .output-label {
+    background-color: var(--mantle);
+    color: var(--mauve);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 6px 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 1px solid var(--surface1);
+  }
+
+  #latex-output {
+    flex: 1;
+    overflow: auto;
+    padding: 16px;
+    background-color: var(--base);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #latex-output .katex-display {
+    margin: 0;
+  }
+
+  #latex-output .katex {
+    font-size: 1.4em;
+    color: var(--text);
+  }
+
+  #latex-output .plain-text {
+    width: 100%;
+    white-space: pre-wrap;
+    text-align: left;
+    color: var(--text);
+    line-height: 1.6;
+  }
+
+  /* ── Error Styling ── */
+  .katex-error {
+    color: var(--red) !important;
+    background-color: rgba(243, 139, 168, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 14px;
+  }
+
+  .parse-error {
+    color: var(--red);
+    background-color: rgba(243, 139, 168, 0.08);
+    border: 1px solid rgba(243, 139, 168, 0.2);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 13px;
+    line-height: 1.5;
+    max-width: 100%;
+    word-break: break-word;
+  }
+
+  .placeholder-text {
+    color: var(--surface2);
+    font-size: 14px;
+    text-align: center;
+    line-height: 1.8;
+  }
+
+  .placeholder-text kbd {
+    background-color: var(--surface0);
+    border: 1px solid var(--surface1);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 12px;
+    color: var(--overlay1);
+  }
+
+  /* ── Footer ── */
+  .footer {
+    background-color: var(--surface0);
+    padding: 6px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px solid var(--surface1);
+    flex-shrink: 0;
+  }
+
+  .copy-btn {
+    background-color: var(--surface1);
+    color: var(--text);
+    border: 1px solid var(--surface2);
+    padding: 5px 14px;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .copy-btn:hover {
+    background-color: var(--blue);
+    color: var(--crust);
+    border-color: var(--blue);
+  }
+
+  .copy-btn:active {
+    transform: scale(0.96);
+  }
+
+  .copy-btn.copied {
+    background-color: var(--green);
+    color: var(--crust);
+    border-color: var(--green);
+  }
+
+  .status-text {
+    font-size: 11px;
+    color: var(--overlay0);
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--base);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--surface1);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--surface2);
+  }
+
+  /* ── Diagram / ASCII art blocks ── */
+  .mermaid-container {
+    display: flex; justify-content: center;
+    padding: 12px 16px; margin: 6px 0;
+    background: var(--mantle);
+    border-radius: 8px;
+    border: 1px solid var(--surface1);
+    overflow-x: auto; width: 100%;
+  }
+  .mermaid-container svg { max-width: 100%; height: auto; }
+
+  pre.ascii-art {
+    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', monospace;
+    font-size: 13px; line-height: 1.5;
+    padding: 12px 16px; margin: 6px 0;
+    background: var(--mantle);
+    border-radius: 8px;
+    border: 1px solid var(--surface1);
+    overflow-x: auto;
+    color: var(--text);
+    white-space: pre; width: 100%;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 600px) {
+    .main {
+      flex-direction: column;
+    }
+    .input-panel {
+      width: 100%;
+      height: 40%;
+      border-right: none;
+      border-bottom: 1px solid var(--surface1);
+    }
+    .output-panel {
+      width: 100%;
+      height: 60%;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <span class="header-title">λ LaTeX Preview</span>
+  <span class="header-hint">Esc to close</span>
+</div>
+
+<div class="main">
+  <div class="input-panel">
+    <div class="input-label">Input</div>
+    <textarea id="latex-input" spellcheck="false"
+      placeholder="Type raw LaTeX, diagrams, or any content&#10;&#10;Examples:&#10;  $E=mc^2$  ·  $$\int_0^\infty e^{-x^2} dx$$&#10;  \[ \sum_{n=1}^{\infty} \frac{1}{n^2} \]&#10;  \begin{equation} E = h\nu \end{equation}&#10;  &#10;  ```mermaid&#10;  graph LR&#10;    A[Start] --> B[End]&#10;  ```&#10;  &#10;  Flowchart ASCII (│ ├ └ → ▼) se renderiza bonito."></textarea>
+  </div>
+
+  <div class="output-panel">
+    <div class="output-label">Rendered</div>
+    <div id="latex-output">
+      <div class="placeholder-text">
+        LaTeX will render here in real-time.<br>
+        Press <kbd>Ctrl+C</kbd> on input to copy later.
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  <span class="status-text" id="status-text">Ready</span>
+  <button class="copy-btn" id="copy-btn" title="Copy LaTeX source to clipboard">Copy LaTeX</button>
+</div>
+
+<!-- KaTeX JS -->
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+
+<script>
+  // ── Preview module ───────────────────────────────────────────────
+  // Owns the whole popup render pipeline: read the textarea, split it into
+  // Mermaid / ASCII-art / text blocks, render LaTeX through KaTeX and
+  // document structure into detached DOM, then swap the result into the
+  // output panel. Any input event re-renders the full document.
+  // ─────────────────────────────────────────────────────────────────
+
+  const input = document.getElementById('latex-input');       // source textarea
+  const output = document.getElementById('latex-output');     // render target
+  const copyBtn = document.getElementById('copy-btn');        // clipboard button
+  const statusText = document.getElementById('status-text');  // footer status label
+
+  let debounceTimer = null;   // pending debounce handle for input events
+  const DEBOUNCE_MS = 80;     // keystroke-to-render delay in milliseconds
+
+  // ── Mermaid init (dark Catppuccin theme) ──
+  let mermaidIdCounter = 0;   // unique element id per rendered diagram
+  try {
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'base',
+      themeVariables: {
+        background: '#1e1e2e',
+        primaryColor: '#89b4fa',
+        primaryBorderColor: '#89b4fa',
+        primaryTextColor: '#cdd6f4',
+        secondaryColor: '#313244',
+        secondaryBorderColor: '#45475a',
+        secondaryTextColor: '#cdd6f4',
+        tertiaryColor: '#181825',
+        lineColor: '#585b70',
+        textColor: '#cdd6f4',
+        mainBkg: '#1e1e2e',
+        nodeBorder: '#45475a',
+        clusterBkg: '#181825',
+        clusterBorder: '#313244',
+        titleColor: '#cdd6f4',
+        edgeLabelBackground: '#313244',
+        nodeTextColor: '#cdd6f4',
+      }
+    });
+  } catch (e) { /* Mermaid unavailable (offline CDN) — text still renders */ }
+
+  // ── Delimiter parser ──────────────────────────────────────────────
+  // Parse all LaTeX math delimiters
+  // Handles: $$...$$, \[...\], \begin{NAME}...\end{NAME},
+  //          $...$, \(...\)
+  //
+  // Returns [{type: 'text', content: '...'}, {type: 'math', content: '...', display: bool}, ...]
+  //
+  // For \begin{NAME}..\end{NAME} the content INCLUDES the tags (KaTeX needs them).
+  // For $$, \[, $, \( the content is the inner math only.
+
+  /**
+   * Finds the close tag that balances the environment already opened at pos.
+   * @param {string} str Source text scanned.
+   * @param {number} pos Index just after the opening tag.
+   * @param {string} openTag Open tag counted for nesting, e.g. '\begin{matrix}'.
+   * @param {string} closeTag Close tag searched for.
+   * @returns {number} Index of the balancing close tag, or -1 when unbalanced.
+   */
+
+  function findMatchingClose(str, pos, openTag, closeTag) {
+    let depth = 1;
+    let searchPos = pos;
+    while (searchPos < str.length && depth > 0) {
+      const nextOpen  = str.indexOf(openTag,  searchPos);
+      const nextClose = str.indexOf(closeTag, searchPos);
+      if (nextClose === -1) return -1;
+      if (nextOpen !== -1 && nextOpen < nextClose) {
+        depth++;
+        searchPos = nextOpen + openTag.length;
+      } else {
+        depth--;
+        if (depth === 0) return nextClose;
+        searchPos = nextClose + closeTag.length;
+      }
+    }
+    return -1;
+  }
+
+  /**
+   * Splits text into text/math segments for every supported delimiter type.
+   * @param {string} input Raw text.
+   * @returns {Array<{type: 'text'|'math', content: string, display?: boolean}>}
+   *   Segments in document order; math segments carry the display flag.
+   */
+  function parseDelimiters(input) {
+    const segments = [];
+    let pos = 0;
+
+    while (pos < input.length) {
+      let earliest = null;  // { pos, type, display, openerLen, closer, closerLen, envName?, fullContent? }
+
+      // 1. $$ … $$  (display)
+      let idx = input.indexOf('$$', pos);
+      if (idx !== -1) {
+        earliest = { pos: idx, type: 'dblDollar', display: true,
+                     openerLen: 2, closer: '$$', closerLen: 2 };
+      }
+
+      // 2. \[ … \]  (display)
+      idx = input.indexOf('\\[', pos);
+      if (idx !== -1 && (!earliest || idx < earliest.pos)) {
+        earliest = { pos: idx, type: 'dblBracket', display: true,
+                     openerLen: 2, closer: '\\]', closerLen: 2 };
+      }
+
+      // 3. \begin{NAME} … \end{NAME}  (display)
+      const beginRe = /\\begin\{(\w+)\*?\}/g;
+      beginRe.lastIndex = pos;
+      const beginMatch = beginRe.exec(input);
+      if (beginMatch) {
+        const absPos = beginMatch.index;
+        if (!earliest || absPos < earliest.pos) {
+          const envName  = beginMatch[1] + (beginMatch[0].endsWith('*}') ? '*' : '');
+          earliest = { pos: absPos, type: 'beginEnv', display: true,
+                       openerLen: beginMatch[0].length,
+                       envName: envName,
+                       closeTag: '\\end{' + envName + '}' };
+        }
+      }
+
+      // 4. $ … $  (inline, skip \$ and $$)
+      let sglPos = -1;
+      let sp = pos;
+      while (sp < input.length) {
+        const d = input.indexOf('$', sp);
+        if (d === -1) break;
+        if (d > 0 && input[d - 1] === '\\') { sp = d + 1; continue; }          // \$
+        if (d + 1 < input.length && input[d + 1] === '$') { sp = d + 2; continue; } // $$
+        sglPos = d;
+        break;
+      }
+      if (sglPos !== -1 && (!earliest || sglPos < earliest.pos)) {
+        earliest = { pos: sglPos, type: 'sglDollar', display: false,
+                     openerLen: 1, closer: '$', closerLen: 1 };
+      }
+
+      // 5. \( … \)  (inline)
+      idx = input.indexOf('\\(', pos);
+      if (idx !== -1 && (!earliest || idx < earliest.pos)) {
+        earliest = { pos: idx, type: 'sglParen', display: false,
+                     openerLen: 2, closer: '\\)', closerLen: 2 };
+      }
+
+      // No delimiter found → rest is plain text
+      if (!earliest) {
+        if (pos < input.length)
+          segments.push({ type: 'text', content: input.substring(pos) });
+        break;
+      }
+
+      // Text before the delimiter
+      if (earliest.pos > pos)
+        segments.push({ type: 'text', content: input.substring(pos, earliest.pos) });
+
+      // ── Extract math content ──
+      const contentStart = earliest.pos + earliest.openerLen;
+      let content = '';
+      let nextPos = input.length;
+
+      if (earliest.type === 'beginEnv') {
+        // For environments: keep the \begin{…}…\end{…} tags (KaTeX needs them)
+        const envEnd = findMatchingClose(input, contentStart,
+                                          '\\begin{' + earliest.envName + '}',
+                                          earliest.closeTag);
+        if (envEnd !== -1) {
+          content = input.substring(earliest.pos, envEnd + earliest.closeTag.length);
+          nextPos = envEnd + earliest.closeTag.length;
+        } else {
+          content = input.substring(earliest.pos);   // unclosed → take rest
+        }
+      } else {
+        // For $$, \[, $, \( : strip the delimiters
+        let closePos = -1;
+        if (earliest.type === 'sglDollar') {
+          // Find unescaped closing $
+          let sp2 = contentStart;
+          while (sp2 < input.length) {
+            const d = input.indexOf('$', sp2);
+            if (d === -1) break;
+            if (d > 0 && input[d - 1] === '\\') { sp2 = d + 1; continue; }
+            closePos = d;
+            break;
+          }
+        } else {
+          closePos = input.indexOf(earliest.closer, contentStart);
+        }
+
+        if (closePos !== -1) {
+          content = input.substring(contentStart, closePos);
+          nextPos = closePos + earliest.closerLen;
+        } else {
+          content = input.substring(contentStart);
+        }
+      }
+
+      segments.push({ type: 'math', content: content, display: earliest.display });
+      pos = nextPos;
+    }
+
+    return segments;
+  }
+
+  // ── Block extraction ──────────────────────────────────────────────
+  // Diagram / ASCII art detection
+
+  /**
+   * Detects a line built from Unicode flowchart glyphs.
+   * @param {string} line Single input line.
+   * @returns {boolean} True when the line should render as ASCII art.
+   */
+  function isDiagramLine(line) {
+    return /[│├└┘┤┬┴┼─╭╮╰╯╱╲▼▲▽△▶▷◀◁◆◇○●■□→←↑↓↔↕↖↗↘↙✓✗·∞≈]/.test(line);
+  }
+
+  /**
+   * Groups raw input into renderable blocks.
+   * @param {string} input Raw text.
+   * @returns {Array<{type: 'mermaid'|'ascii-art'|'text', content: string}>}
+   *   Blocks in document order.
+   */
+  function extractBlocks(input) {
+    const blocks = [];
+    const lines = input.split('\n');
+    let i = 0;
+
+    while (i < lines.length) {
+      // ── Mermaid fenced block ──
+      if (lines[i].trim() === '```mermaid') {
+        const start = i + 1;
+        let end = start;
+        while (end < lines.length && lines[end].trim() !== '```') end++;
+        const content = lines.slice(start, end).join('\n').trim();
+        blocks.push({ type: 'mermaid', content });
+        i = end + 1;
+        continue;
+      }
+
+      // ── ASCII art block ──
+      if (isDiagramLine(lines[i])) {
+        const start = i;
+        while (i < lines.length && isDiagramLine(lines[i])) i++;
+        // Also include any indented continuation lines (labels, expressions)
+        while (i < lines.length && lines[i].trim() && lines[i].startsWith('  ')) i++;
+        blocks.push({ type: 'ascii-art', content: lines.slice(start, i).join('\n') });
+        continue;
+      }
+
+      // ── Text block (may contain LaTeX) ──
+      const start = i;
+      while (i < lines.length && !isDiagramLine(lines[i]) && !lines[i].trim().startsWith('```')) i++;
+      blocks.push({ type: 'text', content: lines.slice(start, i).join('\n') });
+    }
+    return blocks;
+  }
+
+  // ── Render helpers ────────────────────────────────────────────────
+
+  /**
+   * Wraps ASCII art in a styled <pre>.
+   * @param {string} content Block text.
+   * @returns {HTMLPreElement} Detached element ready to append.
+   */
+  function renderAsciiArtBlock(content) {
+    const pre = document.createElement('pre');
+    pre.className = 'ascii-art';
+    pre.textContent = content;
+    return pre;
+  }
+
+  // Clipboard applications sometimes strip the backslash from
+  // `\begin{section}{Title}`.  Normalize that typo for rendering only.
+
+  /**
+   * Repairs section commands whose leading backslash was lost on copy.
+   * @param {string} text Arbitrary document text.
+   * @returns {string} Text with \section/\subsection restored and end tags dropped.
+   */
+  function normalizeSectionCommands(text) {
+    return text
+      .replace(/\\?begin\{(section|subsection)\}\s*(?=\{)/g, '\\$1')
+      .replace(/\\?end\{(section|subsection)\}/g, '');
+  }
+
+  /**
+   * Parses a \section{...} or \subsection{...} line.
+   * @param {string} line Trimmed line.
+   * @returns {{level: number, title: string, rest: string}|null} Heading level
+   *   (2 or 3), its title and trailing text, or null when not a heading.
+   */
+  function sectionArgument(line) {
+    const match = line.match(/^\\(section|subsection)\s*\{/);
+    if (!match) return null;
+    let depth = 1;
+    for (let i = match[0].length; i < line.length; i++) {
+      if (line[i] === '{') depth++;
+      else if (line[i] === '}' && --depth === 0)
+        return { level: match[1] === 'section' ? 2 : 3,
+          title: line.substring(match[0].length, i), rest: line.substring(i + 1) };
+    }
+    return null;
+  }
+
+  // Render document-level LaTeX that KaTeX intentionally does not handle.
+  // Math inside each item is delegated back to renderLatexSegments.
+
+  /**
+   * Renders document structure (headings, itemize/enumerate) KaTeX skips.
+   * @param {string} text Block text.
+   * @returns {{el: HTMLElement, hasError: boolean, hasWarnings: boolean}|null}
+   *   Structural result, or null when the block holds no document structure.
+   * @sideeffect Builds a detached container and appends nodes to it.
+   */
+  function renderStructuralText(text) {
+    const lines = text.split('\n');
+    const structural = lines.some(line => /^\s*\\begin\{(itemize|enumerate)\}\s*$/.test(line) || sectionArgument(line.trim()));
+    if (!structural) return null;
+    const container = document.createElement('div');
+    container.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:6px;width:100%;';
+    for (let i = 0; i < lines.length;) {
+      const line = lines[i], trimmed = line.trim();
+      const heading = sectionArgument(trimmed);
+      if (heading) {
+        const el = document.createElement('h' + heading.level);
+        el.textContent = heading.title;
+        container.appendChild(el);
+        if (heading.rest.trim()) container.appendChild(renderLatexSegments(heading.rest.trim()).el);
+        i++; continue;
+      }
+      const list = trimmed.match(/^\\begin\{(itemize|enumerate)\}\s*$/);
+      if (list) {
+        const listEl = document.createElement(list[1] === 'enumerate' ? 'ol' : 'ul');
+        i++;
+        let item = null;
+        while (i < lines.length && lines[i].trim() !== '\\end{' + list[1] + '}') {
+          const itemMatch = lines[i].trim().match(/^\\item\s*(.*)$/);
+          if (itemMatch) {
+            if (item !== null) {
+              const li = document.createElement('li');
+              li.appendChild(renderLatexSegments(item).el);
+              listEl.appendChild(li);
+            }
+            item = itemMatch[1];
+          } else if (item !== null && lines[i].trim()) item += '\n' + lines[i];
+          i++;
+        }
+        if (item !== null) {
+          const li = document.createElement('li');
+          li.appendChild(renderLatexSegments(item).el);
+          listEl.appendChild(li);
+        }
+        if (i < lines.length) i++;
+        container.appendChild(listEl); continue;
+      }
+      if (trimmed) container.appendChild(renderLatexSegments(line).el);
+      i++;
+    }
+    return { el: container, hasError: false, hasWarnings: false };
+  }
+
+  // ── LaTeX segment rendering ───────────────────────────────────────
+
+  /**
+   * Renders one text block: plain prose, a single expression, or mixed segments.
+   * @param {string} text Block text.
+   * @returns {{el: HTMLElement, hasError: boolean, hasWarnings: boolean}}
+   *   Detached container plus the error/warning state of the render.
+   */
+  function renderLatexSegments(text) {
+    text = normalizeSectionCommands(text);
+    const structural = renderStructuralText(text);
+    if (structural) return structural;
+    const container = document.createElement('div');
+    container.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:6px;width:100%;';
+    let hasError = false;
+    let hasWarnings = false;
+
+    if (!text.trim()) return { el: container, hasError: false, hasWarnings: false };
+
+    const hasDelimiters = /\$[^$]/.test(text) || /\$\$/.test(text) ||
+      /\\\[/.test(text) || /\\\(/.test(text) || /\\begin\{/.test(text);
+
+    if (!hasDelimiters) {
+      // Ordinary clipboard text is content, not a KaTeX expression.  The
+      // old code sent every delimiter-free note to KaTeX, which discarded
+      // headings and prose (or displayed it as a red parse error).
+      const looksLikeLatex = /\\[a-zA-Z]+|[{}_^]/.test(text);
+      if (!looksLikeLatex) {
+        const plain = document.createElement('div');
+        plain.className = 'plain-text';
+        plain.textContent = text;
+        container.appendChild(plain);
+        return { el: container, hasError: false, hasWarnings: false };
+      }
+
+      // Pure LaTeX — render as single expression
+      const isDisplay = text.includes('\n') || text.trim().startsWith('\\begin');
+      const mathDiv = document.createElement('div');
+      if (isDisplay) mathDiv.style.cssText = 'width:100%;text-align:center;';
+      try {
+        katex.render(text, mathDiv, { displayMode: isDisplay, throwOnError: true, trust: true, strict: false });
+      } catch (err) {
+        try {
+          katex.render(text, mathDiv, { displayMode: isDisplay, throwOnError: false, trust: true, strict: false });
+          hasWarnings = true;
+        } catch (err2) {
+          mathDiv.innerHTML = '<span class="parse-error katex-error">' + escapeHtml(err.message) + '</span>';
+          hasError = true;
+        }
+      }
+      container.appendChild(mathDiv);
+      return { el: container, hasError, hasWarnings };
+    }
+
+    // Mixed text + math delimiters
+    const segments = parseDelimiters(text);
+    for (const seg of segments) {
+      if (seg.type === 'text') {
+        const span = document.createElement('span');
+        span.textContent = seg.content;
+        span.style.cssText = 'color:#9399b2;font-size:1em;padding:0 4px;width:100%;white-space:pre-wrap;text-align:left;';
+        container.appendChild(span);
+      } else {
+        const mathDiv = document.createElement('div');
+        if (seg.display) mathDiv.style.cssText = 'width:100%;text-align:center;padding:2px 0;';
+        try {
+          katex.render(seg.content, mathDiv, { displayMode: seg.display, throwOnError: true, trust: true, strict: false });
+        } catch (err) {
+          try {
+            katex.render(seg.content, mathDiv, { displayMode: seg.display, throwOnError: false, trust: true, strict: false });
+            hasWarnings = true;
+          } catch (err2) {
+            mathDiv.innerHTML = '<span class="parse-error">' + escapeHtml(err.message) + '</span>';
+            hasError = true;
+          }
+        }
+        container.appendChild(mathDiv);
+      }
+    }
+    return { el: container, hasError, hasWarnings };
+  }
+
+  /**
+   * Renders a Mermaid definition into a container.
+   * @param {string} content Mermaid source.
+   * @returns {Promise<HTMLElement>} Container holding the SVG or an error panel.
+   */
+  async function renderMermaidBlock(content) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'mermaid-container';
+    try {
+      const id = 'mermaid-' + (mermaidIdCounter++);
+      const { svg } = await mermaid.render(id, content);
+      wrapper.innerHTML = svg;
+    } catch (err) {
+      wrapper.className = 'parse-error';
+      wrapper.textContent = 'Mermaid error: ' + err.message;
+    }
+    return wrapper;
+  }
+
+  // ── Full-document render ──────────────────────────────────────────
+
+  /**
+   * Re-renders the whole preview from the textarea value.
+   * @param {string} input Raw text.
+   * @returns {Promise<void>} Resolves after every block is appended and the
+   *   status label is updated.
+   * @sideeffect Replaces output children and rewrites the status label.
+   */
+  async function renderContent(input) {
+    if (!input.trim()) {
+      output.innerHTML = '<div class="placeholder-text">LaTeX will render here in real-time.<br>Press <kbd>Ctrl+C</kbd> on input to copy later.</div>';
+      statusText.textContent = 'Ready';
+      statusText.style.color = '';
+      return;
+    }
+
+    const blocks = extractBlocks(input);
+    const container = document.createElement('div');
+    container.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:6px;width:100%;';
+    let overallError = false;
+
+    for (const block of blocks) {
+      if (block.type === 'mermaid') {
+        const el = await renderMermaidBlock(block.content);
+        if (el.className === 'parse-error') overallError = true;
+        container.appendChild(el);
+      } else if (block.type === 'ascii-art') {
+        container.appendChild(renderAsciiArtBlock(block.content));
+      } else {
+        const result = renderLatexSegments(block.content);
+        if (result.el.hasChildNodes()) container.appendChild(result.el);
+        if (result.hasError) overallError = true;
+      }
+    }
+
+    output.innerHTML = '';
+    output.appendChild(container);
+
+    if (overallError) {
+      statusText.textContent = '⚠ Some errors';
+      statusText.style.color = '#f9e2af';
+    } else {
+      statusText.textContent = '✓ Rendered';
+      statusText.style.color = '#a6e3a1';
+    }
+  }
+
+  /**
+   * Escapes text for safe innerHTML insertion.
+   * @param {string} text Raw text.
+   * @returns {string} HTML-escaped string.
+   */
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  // ── Event wiring ──────────────────────────────────────────────────
+
+  // ── Debounced Input ──
+  input.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      renderContent(input.value);
+    }, DEBOUNCE_MS);
+  });
+
+  // ── Copy Button ──
+  copyBtn.addEventListener('click', () => {
+    const latex = input.value;
+    if (!latex.trim()) {
+      statusText.textContent = 'Nothing to copy';
+      statusText.style.color = '#f38ba8';
+      return;
+    }
+
+    navigator.clipboard.writeText(latex).then(() => {
+      copyBtn.textContent = 'Copied!';
+      copyBtn.classList.add('copied');
+      statusText.textContent = 'Copied to clipboard';
+      statusText.style.color = '#a6e3a1';
+      setTimeout(() => {
+        copyBtn.textContent = 'Copy LaTeX';
+        copyBtn.classList.remove('copied');
+      }, 1500);
+    }).catch(() => {
+      // Fallback: select and copy via textarea
+      input.select();
+      document.execCommand('copy');
+      copyBtn.textContent = 'Copied!';
+      copyBtn.classList.add('copied');
+      setTimeout(() => {
+        copyBtn.textContent = 'Copy LaTeX';
+        copyBtn.classList.remove('copied');
+      }, 1500);
+    });
+  });
+
+  // ── Keyboard Shortcuts ──
+  document.addEventListener('keydown', (e) => {
+    // Esc: try to close the window
+    if (e.key === 'Escape') {
+      window.close();
+      // If window.close() doesn't work (most browsers block it for non-script-opened windows),
+      // we just clear the input as a fallback
+      if (!window.closed) {
+        input.value = '';
+        renderContent('');
+        input.focus();
+      }
+    }
+
+    // Ctrl+Enter: copy LaTeX
+    if (e.key === 'Enter' && e.ctrlKey) {
+      e.preventDefault();
+      copyBtn.click();
+    }
+  });
+
+  // ── Tab Support in Textarea ──
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const start = input.selectionStart;
+      const end = input.selectionEnd;
+      input.value = input.value.substring(0, start) + '  ' + input.value.substring(end);
+      input.selectionStart = input.selectionEnd = start + 2;
+      // Trigger render
+      renderContent(input.value);
+    }
+  });
+
+  // ── Auto-focus ──
+  input.focus();
+
+  // ── Load from URL hash (for sharing snippets) ──
+  // A hash carries a pre-encoded snippet injected by the launcher.
+  if (window.location.hash) {
+    try {
+      const shared = decodeURIComponent(window.location.hash.substring(1));
+      input.value = shared;
+      renderContent(shared);
+    } catch (e) {
+      // ignore
+    }
+  }
+</script>
+
+</body>
+</html>

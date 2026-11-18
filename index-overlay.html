@@ -1,0 +1,1572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LaTeX Overlay</title>
+<link rel="stylesheet" href="vendor/katex/katex.min.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/katex@0.19.1/dist/katex.min.css'">
+<style>
+  :root {
+    --base: rgba(20, 20, 35, 0.88);
+    --surface: rgba(49, 50, 68, 0.75);
+    --text: #cdd6f4;
+    --blue: #89b4fa;
+    --green: #a6e3a1;
+    --red: #f38ba8;
+    --yellow: #f9e2af;
+    --mauve: #cba6f7;
+    --surface1: rgba(69, 71, 90, 0.6);
+    --surface2: rgba(88, 91, 112, 0.5);
+    --crust: #11111b;
+    --scale: 1;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: transparent !important; height: 100%; overflow: hidden; }
+  body { display: flex; flex-direction: column; font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; }
+  .mode-bar {
+    background: var(--surface); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    padding: 4px 12px; display: flex; align-items: center; gap: 10px;
+    border-bottom: 1px solid rgba(137, 180, 250, 0.15); flex-shrink: 0; -webkit-app-region: drag;
+  }
+  .mode-bar .title { font-size: 11px; font-weight: 600; color: var(--blue); letter-spacing: 1px; text-transform: uppercase; }
+  .mode-bar .spacer { flex: 1; }
+  .mode-bar .hints { font-size: 10px; color: rgba(166, 172, 200, 0.6); }
+  .mode-bar .hints kbd { background: rgba(69, 71, 90, 0.5); border: 1px solid rgba(137, 180, 250, 0.15); border-radius: 3px; padding: 0 4px; font-size: 10px; color: rgba(166, 172, 200, 0.7); }
+  .bar-btn {
+    background: rgba(69, 71, 90, 0.5); color: var(--text); border: 1px solid rgba(137, 180, 250, 0.15);
+    padding: 2px 10px; border-radius: 4px; font-family: inherit; font-size: 11px; cursor: pointer;
+    transition: all 0.12s ease; flex-shrink: 0;
+  }
+  .bar-btn:hover { background: var(--blue); color: var(--crust); border-color: var(--blue); }
+  .bar-btn.active { background: var(--mauve); color: var(--crust); border-color: var(--mauve); }
+  .bar-btn, .history-entry, .history-delete { -webkit-app-region: no-drag; }
+  .history-toggle { font-size: 14px; padding: 1px 8px; }
+  .history-controls { display: flex; align-items: center; gap: 4px; }
+  .history-controls .bar-btn { padding: 2px 7px; }
+  #history-position { min-width: 38px; text-align: center; color: var(--yellow); font-size: 10px; }
+  #history-preview { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: rgba(166,172,200,0.6); font-size: 10px; }
+
+  /* ── Clipboard history sidebar ── */
+  .workspace { display: flex; flex: 1; min-height: 0; }
+  #history-sidebar { width: 230px; flex: 0 0 230px; display: flex; flex-direction: column;
+    background: rgba(17,17,27,0.94); border-right: 1px solid var(--surface1); }
+  #history-sidebar.collapsed { display: none; }
+  .history-heading { padding: 7px 10px; color: var(--mauve); font-size: 10px; text-transform: uppercase;
+    letter-spacing: 1px; border-bottom: 1px solid var(--surface1); }
+  .history-tabs { display:flex; gap:4px; padding:5px; border-bottom:1px solid var(--surface1); }
+  .history-tabs .bar-btn { flex:1; padding:4px 2px; font-size:10px; }
+  .history-tabs .selected { background:var(--mauve); color:var(--crust); }
+  #history-list { flex: 1; overflow: auto; padding: 4px; }
+  .history-empty { padding: 12px 8px; color: rgba(166,172,200,0.45); font-size: 11px; text-align: center; }
+  .history-entry { display: flex; align-items: stretch; gap: 4px; margin: 2px 0; border: 1px solid transparent;
+    border-radius: 4px; background: transparent; color: var(--text); cursor: pointer; text-align: left; width: 100%; }
+  .history-entry:hover { background: var(--surface); border-color: var(--surface1); }
+  .history-entry.selected { background: rgba(137,180,250,0.16); border-color: var(--blue); }
+  .history-entry-content { min-width: 0; flex: 1; padding: 7px 5px 7px 7px; border: 0; background: transparent;
+    color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .history-entry-preview { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+  .history-entry-id { display: block; color: rgba(166,172,200,0.45); font-size: 9px; margin-top: 2px; }
+  .history-delete { flex: 0 0 27px; align-self: center; margin-right: 3px; padding: 3px; border: 0; border-radius: 3px;
+    background: transparent; color: rgba(243,139,168,0.8); cursor: pointer; font-size: 13px; }
+  .history-delete:hover { background: var(--red); color: var(--crust); }
+
+  /* ── OpenCode sessions ── */
+  #sessions-controls label { display: flex; gap: 5px; align-items: center; font-size: 10px; color: rgba(166,172,200,0.7); cursor: pointer; }
+  #session-position { min-width: 44px; text-align: center; color: var(--green); font-size: 10px; }
+  .session-title { display: block; font-size: 11px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .session-meta { display: block; color: rgba(166,172,200,0.5); font-size: 9px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .session-badge { display: inline-block; font-size: 9px; padding: 0 4px; border-radius: 3px; margin-right: 4px; }
+  .session-badge.open { background: rgba(166,227,161,0.2); color: var(--green); }
+  .session-badge.busy { background: rgba(249,226,175,0.2); color: var(--yellow); }
+  .session-badge.closed { background: rgba(166,172,200,0.12); color: rgba(166,172,200,0.55); }
+  .history-entry.child { margin-left: 36px; border-left: 1px solid rgba(166,172,200,0.18); }
+  .session-parent { color: var(--mauve); }
+  .session-group { padding: 6px 8px 2px; color: var(--mauve); font-size: 9px; text-transform: uppercase; letter-spacing: 1px; }
+  .session-group.collapsible { cursor: pointer; width: 100%; text-align: left; background: transparent; border: 0; color: var(--mauve); padding: 6px 8px 2px; font: inherit; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; }
+  .session-group.collapsible:hover { background: var(--surface); }
+  .session-group .chevron { opacity: .7; margin-right: 4px; }
+
+  /* ── Edit mode ── */
+  #edit-view {
+    display: none; flex: 1; flex-direction: column;
+  }
+  #edit-view.visible { display: flex; }
+  #latex-input {
+    flex: 1; background: var(--crust); color: var(--text); border: none; outline: none;
+    padding: 12px 16px; font-family: inherit; font-size: 13px; line-height: 1.6; resize: none;
+  }
+  #latex-input::placeholder { color: var(--surface2); }
+
+  /* ── Render mode ── */
+  #render-view {
+    flex: 1; overflow: auto; padding: 12px 16px;
+    background: var(--base); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  }
+  #render-view.hidden { display: none; }
+  #render-view .doc { zoom: var(--scale); }
+  #zoom-value { min-width: 40px; text-align: center; color: var(--blue); font-size: 10px; }
+
+  /* Reading rhythm: a wrapped source line is still one text flow, while an
+     empty source line is rendered as a visibly larger paragraph boundary.
+     Keep this scoped to .doc so controls, history and edit mode are untouched. */
+  .doc { font-size: 13px; line-height: 1.85; color: var(--text); }
+  .doc p { margin: 0; }
+  .doc p:last-child { margin-bottom: 0; }
+  .doc .line-break { height: 1.15em; }
+  .doc h1, .doc h2, .doc h3 { margin: 1.35em 0 0.45em 0; font-weight: 600; }
+  .doc h1, .doc h2 { color: var(--mauve); }
+  .doc h3 { color: var(--yellow); }
+  .doc h1 { font-size: 1.2em; }
+  .doc h2 { font-size: 1.1em; }
+  .doc h3 { font-size: 1.0em; }
+  .doc blockquote { border-left: 3px solid var(--surface2); margin: 6px 0; padding: 2px 0 2px 10px; color: rgba(166, 172, 200, 0.85); }
+  .doc strong { color: var(--mauve); font-weight: 600; }
+  .doc em { color: var(--yellow); font-style: italic; }
+  .doc code { background: rgba(69, 71, 90, 0.7); padding: 1px 5px; border-radius: 3px; font-size: 0.9em; color: var(--green); }
+  .doc hr { border: none; border-top: 1px solid var(--surface2); margin: 8px 0; }
+  .doc ul, .doc ol { margin: 4px 0 6px 18px; }
+  .doc li { margin: 1px 0; }
+  .doc table { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 12px; }
+  .doc th { background: var(--surface1); color: var(--blue); font-weight: 600; text-align: left; padding: 5px 8px; border: 1px solid var(--surface2); }
+  .doc td { padding: 4px 8px; border: 1px solid var(--surface2); vertical-align: middle; }
+  .doc tr:nth-child(even) td { background: rgba(49, 50, 68, 0.3); }
+   .doc .display-math { text-align: center; margin: 0.85em 0; }
+  .doc .display-math .katex-display { margin: 0; }
+  .doc .katex { font-size: 1.1em; }
+  .doc .display-math .katex { font-size: 1.2em; }
+  .doc td .katex { font-size: 1.05em; }
+  /* Rendering diagnostics are deliberately not styled as source/error code. */
+  .math-error { color: var(--yellow); font-size: 0.85em; }
+  .placeholder-text { color: rgba(166, 172, 200, 0.35); font-size: 13px; text-align: center; line-height: 1.8; }
+  /* Busy placeholder: same reading rhythm as any other placeholder, with a
+     slow pulse so an in-progress agent is distinguishable from an empty pane. */
+  .placeholder-text.loading { color: rgba(166, 172, 200, 0.65); animation: overlay-pulse 1.2s ease-in-out infinite; }
+  @keyframes overlay-pulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+
+  .status-line { background: var(--surface); backdrop-filter: blur(12px); padding: 3px 12px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid rgba(137, 180, 250, 0.1); flex-shrink: 0; }
+  .status-line .status { font-size: 10px; }
+  .status-line .copy-btn { background: rgba(69, 71, 90, 0.5); color: var(--text); border: 1px solid rgba(137, 180, 250, 0.15); padding: 2px 10px; border-radius: 4px; font-family: inherit; font-size: 10px; cursor: pointer; transition: all 0.12s ease; }
+  .status-line .copy-btn:hover { background: var(--blue); color: #1e1e2e; border-color: var(--blue); }
+  .status-line .copy-btn.copied { background: var(--green); color: #1e1e2e; border-color: var(--green); }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(69, 71, 90, 0.4); border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(69, 71, 90, 0.7); }
+</style>
+</head>
+<body>
+
+<div class="mode-bar">
+  <span class="title">λ LaTeX Overlay</span>
+  <button class="bar-btn history-toggle" id="history-toggle" title="Toggle clipboard history">☰</button>
+  <div class="history-controls" id="clipboard-controls">
+    <button class="bar-btn" id="history-prev" title="Older clipboard (Ctrl+←)">‹</button>
+    <span id="history-position">Live</span>
+    <button class="bar-btn" id="history-next" title="Newer clipboard (Ctrl+→)">›</button>
+    <button class="bar-btn" id="history-copy" title="Copy selected clipboard">↥</button>
+    <button class="bar-btn" id="history-delete" title="Delete selected clipboard (Ctrl+D)">🗑</button>
+    <button class="bar-btn" id="history-wipe" title="Clear clipboard history">Clear</button>
+    <button class="bar-btn" id="history-undo" title="Undo last deletion (Ctrl+Z)">↶ Undo</button>
+  </div>
+  <div class="history-controls" id="session-controls" style="display:none">
+    <button class="bar-btn" id="session-prev" title="Mensaje anterior (Alt+←)">‹</button>
+    <span id="session-position">-/-</span>
+    <button class="bar-btn" id="session-next" title="Mensaje siguiente (Alt+→)">›</button>
+    <button class="bar-btn" id="session-follow" title="Seguir la sesión seleccionada">Follow: on</button>
+    <button class="bar-btn" id="session-clipboard" title="Volver al portapapeles">Clipboard</button>
+  </div>
+  <span class="spacer"></span>
+  <div class="history-controls" id="zoom-controls">
+    <button class="bar-btn" id="zoom-out" title="Zoom out (Ctrl+-)">−</button>
+    <button class="bar-btn" id="zoom-value" title="Reset zoom (dblclick / Ctrl+0)">100%</button>
+    <button class="bar-btn" id="zoom-in" title="Zoom in (Ctrl+=)">+</button>
+  </div>
+  <button class="bar-btn" id="mode-btn" onclick="toggleMode()">Edit</button>
+  <span class="hints"><kbd>Esc</kbd> close · <kbd>Ctrl+E</kbd> edit · <kbd>Ctrl+←/→</kbd> historial · <kbd>Alt+←/→</kbd> mensaje</span>
+</div>
+
+<div class="workspace">
+<aside id="history-sidebar" aria-label="Overlay sidebar">
+  <div class="history-heading" id="sidebar-heading">Sesiones</div>
+  <div class="history-tabs"><button class="bar-btn selected" id="sessions-tab">Sesiones</button><button class="bar-btn" id="history-tab">Historial</button><button class="bar-btn" id="trash-tab">Papelera</button></div>
+  <div id="sessions-controls" style="padding:5px;border-bottom:1px solid var(--surface1)"><label><input type="checkbox" id="subagent-toggle"> Mostrar subagentes</label></div>
+  <div id="trash-actions" style="display:none;padding:5px;border-bottom:1px solid var(--surface1)"><button class="bar-btn" id="trash-wipe" style="width:100%">Vaciar papelera</button></div>
+  <div id="history-list"><div class="history-empty">Cargando sesiones…</div></div>
+</aside>
+<div style="display:flex;flex:1;min-width:0;flex-direction:column">
+<div id="edit-view">
+  <textarea id="latex-input" spellcheck="false" placeholder="Paste or type text with any LaTeX delimiter&#10;($...$, $$...$$, \[...\], \(...\), \begin{env}...\end{env})"></textarea>
+</div>
+
+<div id="render-view">
+  <div class="placeholder-text">Copy any text with LaTeX delimiters<br>and it will render here automatically.</div>
+</div>
+</div>
+</div>
+
+<div class="status-line">
+  <span class="status" id="status" style="color:rgba(166,172,200,0.5)">Watching clipboard...</span>
+  <span id="history-preview"></span>
+  <button class="bar-btn" id="history-live" style="display:none">Live</button>
+  <button class="copy-btn" id="copy-btn">Copy LaTeX</button>
+</div>
+
+<script src="vendor/katex/katex.min.js"></script>
+<script>
+if (typeof katex === "undefined") {
+  document.write('<script src="https://cdn.jsdelivr.net/npm/katex@0.19.1/dist/katex.min.js"><\/script>');
+}
+</script>
+<script>
+// ── Clipboard / session overlay module ──────────────────────────────
+// Drives the overlay window: polls the clipboard and OpenCode sessions from
+// the local server, keeps clipboard history and trash, renders whatever text
+// it shows (LaTeX, markdown-ish structure, tables, lists) into the render
+// view, and owns the keyboard shortcuts plus zoom scaling.
+// ────────────────────────────────────────────────────────────────────
+
+// ── Element handles and zoom ──
+const renderView = document.getElementById('render-view');   // render panel
+const editView = document.getElementById('edit-view');       // edit panel
+const inputEl = document.getElementById('latex-input');      // edit textarea
+const modeBtn = document.getElementById('mode-btn');         // view/edit toggle
+const statusEl = document.getElementById('status');          // status line text
+const copyBtn = document.getElementById('copy-btn');         // copy button
+const zoomValue = document.getElementById('zoom-value');     // zoom percentage label
+let overlayScale = 1;                                        // current zoom factor
+
+/**
+ * Applies a zoom factor, clamped to 0.5–2.0 in 0.1 steps.
+ * @param {number} next Requested scale.
+ * @sideeffect Writes the --scale CSS variable and the zoom label.
+ */
+function applyScale(next) {
+  overlayScale = Math.min(2, Math.max(0.5, Math.round(next * 10) / 10));
+  document.documentElement.style.setProperty('--scale', String(overlayScale));
+  zoomValue.textContent = Math.round(overlayScale * 100) + '%';
+}
+document.getElementById('zoom-in').addEventListener('click', () => applyScale(overlayScale + 0.1));
+document.getElementById('zoom-out').addEventListener('click', () => applyScale(overlayScale - 0.1));
+zoomValue.addEventListener('dblclick', () => applyScale(1));
+// ── Clipboard history state ──
+let latexSource = '';        // clipboard/document text currently owned by the view
+let lastClipboard = '';      // last clipboard payload seen by the poller
+let editMode = false;        // true while the edit panel is open
+let history = [];            // clipboard history entries [{ id, preview }]
+let historyIndex = -1;       // -1 means live clipboard
+let historyRequest = 0;      // cancels stale history fetches
+let renderRequest = 0;       // cancels stale render passes
+
+const historyPosition = document.getElementById('history-position');
+const historyPreview = document.getElementById('history-preview');
+const historyLive = document.getElementById('history-live');
+const historyPrev = document.getElementById('history-prev');
+const historyNext = document.getElementById('history-next');
+const historyCopy = document.getElementById('history-copy');
+const historyDelete = document.getElementById('history-delete');
+const historyWipe = document.getElementById('history-wipe');
+const historyToggle = document.getElementById('history-toggle');
+const historySidebar = document.getElementById('history-sidebar');
+const historyList = document.getElementById('history-list');
+const historyUndo = document.getElementById('history-undo');
+const historyTab = document.getElementById('history-tab');
+const trashTab = document.getElementById('trash-tab');
+const trashActions = document.getElementById('trash-actions');
+const trashWipe = document.getElementById('trash-wipe');
+
+// ── Sidebar state ──
+let trash = [], sidebarView = 'sessions';   // trash entries and active sidebar tab
+
+// ── OpenCode session overlay state ──
+let source = 'clipboard';            // 'clipboard' | 'session'
+let sessions = [];                   // /sessions payload
+let showSubagents = false;           // include child sessions in the list
+let selectedSession = null;          // currently rendered session
+let sessionMessages = [];            // [{ role, text, preview, time_created }]
+let sessionIndex = -1;               // index of the displayed message
+let sessionRequest = 0;              // cancels stale /session responses
+let sessionFollow = true;            // auto-refresh the selected session
+let sessionHistory = [];             // in-memory recently selected sessions
+let sessionTextHash = '';            // last message fingerprint for follow
+const sessionsTab = document.getElementById('sessions-tab');         // sidebar tab: sessions
+const sidebarHeading = document.getElementById('sidebar-heading');   // sidebar title
+const sessionsControls = document.getElementById('sessions-controls'); // subagent filter block
+const subagentToggle = document.getElementById('subagent-toggle');    // include-subagents checkbox
+const clipboardControls = document.getElementById('clipboard-controls'); // clipboard nav block
+const sessionControls = document.getElementById('session-controls'); // session nav block
+const sessionPosition = document.getElementById('session-position'); // "3/12" message counter
+const sessionPrevBtn = document.getElementById('session-prev');      // older message button
+const sessionNextBtn = document.getElementById('session-next');      // newer message button
+const sessionFollowBtn = document.getElementById('session-follow');  // follow toggle
+const sessionClipboardBtn = document.getElementById('session-clipboard'); // back to clipboard
+
+// ── Clipboard history panel ────────────────────────────────────────
+
+/**
+ * Paints the clipboard history rows, marking the browsed entry.
+ * @sideeffect Replaces the sidebar list contents.
+ */
+function renderHistoryList() {
+  historyList.innerHTML = '';
+  if (!history.length) {
+    historyList.innerHTML = '<div class="history-empty">No clipboard entries</div>';
+    return;
+  }
+  history.forEach((entry, index) => {
+    const row = document.createElement('div');
+    row.className = 'history-entry' + (index === historyIndex ? ' selected' : '');
+    row.dataset.index = index;
+    const content = document.createElement('button');
+    content.className = 'history-entry-content';
+    content.type = 'button';
+    content.title = 'Render this clipboard entry';
+    const preview = document.createElement('span');
+    preview.className = 'history-entry-preview';
+    preview.textContent = entry.preview || '(empty)';
+    const id = document.createElement('span');
+    id.className = 'history-entry-id';
+    id.textContent = '#' + entry.id;
+    content.append(preview, id);
+    const remove = document.createElement('button');
+    remove.className = 'history-delete';
+    remove.type = 'button';
+    remove.title = 'Delete this clipboard entry';
+    remove.setAttribute('aria-label', 'Delete clipboard entry');
+    remove.textContent = '🗑';
+    row.append(content, remove);
+    historyList.appendChild(row);
+  });
+}
+
+/**
+ * Paints the trash rows with restore and permanent-delete actions.
+ * @sideeffect Replaces the sidebar list contents.
+ */
+function renderTrashList() {
+  historyList.innerHTML = '';
+  if (!trash.length) { historyList.innerHTML = '<div class="history-empty">La papelera está vacía</div>'; return; }
+  trash.forEach(entry => {
+    const row = document.createElement('div'); row.className = 'history-entry'; row.dataset.id = entry.id;
+    const content = document.createElement('button'); content.className = 'history-entry-content'; content.type = 'button';
+    const preview = document.createElement('span'); preview.className = 'history-entry-preview'; preview.textContent = entry.preview || '(empty)';
+    const id = document.createElement('span'); id.className = 'history-entry-id'; id.textContent = '#' + entry.id;
+    content.append(preview, id);
+    const restore = document.createElement('button'); restore.className = 'history-delete'; restore.title = 'Restaurar'; restore.textContent = '↶';
+    const remove = document.createElement('button'); remove.className = 'history-delete'; remove.title = 'Borrar permanentemente'; remove.textContent = '✕';
+    row.append(content, restore, remove); historyList.appendChild(row);
+  });
+}
+/**
+ * Reloads trash entries from the server and repaints when trash is visible.
+ * @returns {Promise<void>} Resolves after the fetch attempt.
+ * @sideeffect Updates `trash` and may write the status line on failure.
+ */
+async function loadTrash() { try { const response = await fetch('/trash'); if (!response.ok) throw new Error(); trash = await response.json(); if (sidebarView === 'trash') renderTrashList(); } catch (_) { statusEl.textContent = 'No se pudo cargar la papelera'; } }
+
+/**
+ * Switches the sidebar to sessions, history or trash.
+ * @param {'sessions'|'history'|'trash'} view Target sidebar tab.
+ * @sideeffect Toggles tab classes, panel visibility and list contents.
+ */
+function showSidebar(view) {
+  sidebarView = view;
+  const isTrash = view === 'trash';
+  const isSessions = view === 'sessions';
+  sessionsTab.classList.toggle('selected', isSessions);
+  historyTab.classList.toggle('selected', view === 'history');
+  trashTab.classList.toggle('selected', isTrash);
+  trashActions.style.display = isTrash ? 'block' : 'none';
+  sessionsControls.style.display = isSessions ? 'block' : 'none';
+  sidebarHeading.textContent = isSessions ? 'Sesiones' : (isTrash ? 'Papelera' : 'Historial');
+  if (isTrash) loadTrash();
+  else if (isSessions) renderSessionsList();
+  else renderHistoryList();
+}
+
+// ── OpenCode sessions ──────────────────────────────────────────────
+
+/**
+ * Formats a millisecond timestamp as DD/MM HH:MM.
+ * @param {number} ms Epoch milliseconds.
+ * @returns {string} Local stamp, or '—' when missing/invalid.
+ */
+function formatStamp(ms) {
+  if (!ms) return '—';
+  const date = new Date(ms);
+  if (isNaN(date.getTime())) return '—';
+  const pad = (n) => String(n).padStart(2, '0');
+  return pad(date.getDate()) + '/' + pad(date.getMonth() + 1) + ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes());
+}
+
+/**
+ * Extracts the last path segment of a session directory.
+ * @param {string} directory Absolute directory path.
+ * @returns {string} Folder name, or the input when it has no segments.
+ */
+function folderName(directory) {
+  if (!directory) return '';
+  const parts = String(directory).replace(/\/+$/, '').split('/');
+  return parts[parts.length - 1] || directory;
+}
+
+/**
+ * Builds the open/busy/closed status badge markup for a session.
+ * @param {object} session Session summary from /sessions.
+ * @returns {string} HTML fragment with the badge.
+ */
+function sessionStatusBadge(session) {
+  if (!session.open) return '<span class="session-badge closed">cerrada</span>';
+  const cls = session.state === 'busy' ? 'busy' : 'open';
+  const where = [session.tty, session.pid].filter(Boolean).join(' ');
+  return '<span class="session-badge ' + cls + '">' + (session.state === 'busy' ? 'busy' : 'idle') + (where ? ' ' + escPreserve(where) : '') + '</span>';
+}
+
+/**
+ * Builds one clickable sidebar row for a session.
+ * @param {object} session Session summary from /sessions.
+ * @param {boolean} isChild True when the session is a subagent of another.
+ * @returns {HTMLElement} Row element carrying data-session-id.
+ */
+function sessionRow(session, isChild) {
+  const row = document.createElement('div');
+  row.className = 'history-entry' + (isChild ? ' child' : '') + (selectedSession && selectedSession.id === session.id ? ' selected' : '');
+  row.dataset.sessionId = session.id;
+  const content = document.createElement('button');
+  content.className = 'history-entry-content';
+  content.type = 'button';
+  content.title = session.directory || '';
+  const title = document.createElement('span');
+  title.className = 'session-title';
+  title.innerHTML = sessionStatusBadge(session) + escPreserve((isChild ? '└─ ' : '') + (session.title || '(sin título)'));
+  const meta = document.createElement('span');
+  meta.className = 'session-meta';
+  const fields = [session.agent, folderName(session.directory)].filter(Boolean).join(' · ');
+  const dates = formatStamp(session.first_msg_at || session.time_created) + ' → ' + formatStamp(session.last_msg_at || session.time_updated);
+  meta.textContent = (fields ? fields + ' · ' : '') + dates;
+  if (session.parent_id) {
+    const parent = document.createElement('span');
+    parent.className = 'session-parent';
+    parent.innerHTML = ' · ↳ hija de ' + escPreserve(session.parent_title || session.parent_id);
+    meta.append(parent);
+  }
+  content.append(title, meta);
+  row.appendChild(content);
+  return row;
+}
+
+/**
+ * Orders sessions so subagent children follow their parent.
+ * @param {Array<object>} list Sessions to order.
+ * @returns {Array<{session: object, child: boolean}>} Rows in display order.
+ */
+function orderedSessionRows(list = sessions) {
+  if (!showSubagents) return list.map((session) => ({ session, child: false }));
+  const ids = new Set(list.map((session) => session.id));
+  const children = new Map();
+  const tops = [];
+  list.forEach((session) => {
+    if (session.parent_id && ids.has(session.parent_id)) {
+      if (!children.has(session.parent_id)) children.set(session.parent_id, []);
+      children.get(session.parent_id).push(session);
+    } else {
+      tops.push(session);
+    }
+  });
+  const rows = [];
+  tops.forEach((parent) => {
+    rows.push({ session: parent, child: false });
+    (children.get(parent.id) || []).forEach((child) => rows.push({ session: child, child: true }));
+  });
+  return rows;
+}
+
+const CLOSED_COLLAPSED_KEY = 'latex-overlay:closed-collapsed';  // persisted collapse flag
+
+/**
+ * Reads the "closed sessions collapsed" preference.
+ * @returns {boolean} True when the closed group starts collapsed.
+ */
+function closedCollapsed() {
+  try {
+    return localStorage.getItem(CLOSED_COLLAPSED_KEY) !== '0';
+  } catch (e) {
+    return true;
+  }
+}
+
+/**
+ * Persists the "closed sessions collapsed" preference.
+ * @param {boolean} collapsed New collapsed state.
+ */
+function setClosedCollapsed(collapsed) {
+  try {
+    localStorage.setItem(CLOSED_COLLAPSED_KEY, collapsed ? '1' : '0');
+  } catch (e) {}
+}
+
+/**
+ * Sorts comparator: busy sessions first, then most recently updated.
+ * @param {object} a First session.
+ * @param {object} b Second session.
+ * @returns {number} Comparator result for Array#sort.
+ */
+function sessionRank(a, b) {
+  return ((b.state === 'busy') - (a.state === 'busy')) ||
+         ((b.time_updated || 0) - (a.time_updated || 0));
+}
+
+/**
+ * Paints the session sidebar: open group first, collapsible closed group after.
+ * @sideeffect Replaces the sidebar list contents.
+ */
+function renderSessionsList() {
+  historyList.innerHTML = '';
+  if (!sessions.length) {
+    historyList.innerHTML = '<div class="history-empty">No hay sesiones</div>';
+    return;
+  }
+
+  const openRows = orderedSessionRows(sessions.filter((session) => session.open).sort(sessionRank));
+  const closedRows = orderedSessionRows(sessions.filter((session) => !session.open).sort(sessionRank));
+  const current = selectedSession ? sessions.find((session) => session.id === selectedSession.id) : null;
+  const selectedClosed = !!current && !current.open;
+
+  if (selectedClosed) {
+    const index = closedRows.findIndex(({ session }) => session.id === current.id);
+    if (index > 0) closedRows.unshift(closedRows.splice(index, 1)[0]);
+  }
+
+  const openGroup = document.createElement('div');
+  openGroup.className = 'session-group';
+  openGroup.textContent = 'Activas';
+  historyList.appendChild(openGroup);
+  if (!openRows.length) {
+    const empty = document.createElement('div');
+    empty.className = 'history-empty';
+    empty.textContent = 'Sin sesiones activas';
+    historyList.appendChild(empty);
+  }
+  openRows.forEach(({ session, child }) => historyList.appendChild(sessionRow(session, child)));
+
+  if (!closedRows.length) return;
+
+  const collapsed = selectedClosed ? false : closedCollapsed();
+  const header = document.createElement('button');
+  header.type = 'button';
+  header.className = 'session-group collapsible';
+  header.dataset.collapsed = collapsed ? '1' : '0';
+  const chevron = document.createElement('span');
+  chevron.className = 'chevron';
+  chevron.textContent = collapsed ? '▸' : '▾';
+  header.append(chevron, ' Cerradas (' + closedRows.length + ')');
+  header.addEventListener('click', () => {
+    const next = header.dataset.collapsed === '1';
+    setClosedCollapsed(!next);
+    renderSessionsList();
+  });
+  historyList.appendChild(header);
+  if (!collapsed) closedRows.forEach(({ session, child }) => historyList.appendChild(sessionRow(session, child)));
+}
+
+/**
+ * Reloads the session list and refreshes the visible list and busy state.
+ * @returns {Promise<void>} Resolves after the fetch attempt.
+ * @sideeffect Updates `sessions` and may repaint the sidebar.
+ */
+async function loadSessions() {
+  try {
+    const response = await fetch('/sessions' + (showSubagents ? '?subagents=1' : ''));
+    if (!response.ok) return;
+    const payload = await response.json();
+    sessions = Array.isArray(payload) ? payload : (payload.sessions || []);
+    if (sidebarView === 'sessions') renderSessionsList();
+    syncSelectedSessionState();
+  } catch (e) {}
+}
+
+// The /session endpoint carries messages, not live agent state, so the busy
+// flag only arrives through the /sessions poll.  Without this sync the overlay
+// could stay stuck on (or never show) the busy placeholder after the agent
+// transitions between idle and busy.
+
+/**
+ * Copies the polled busy flag onto the selected session and repaints if it flipped.
+ * @sideeffect Mutates `selectedSession.state` and may re-render the message.
+ */
+function syncSelectedSessionState() {
+  if (source !== 'session' || !selectedSession) return;
+  const current = sessions.find((item) => item.id === selectedSession.id);
+  if (!current) return;
+  const wasBusy = selectedSession.state === 'busy';
+  selectedSession.state = current.state;
+  const isBusy = current.state === 'busy';
+  if (wasBusy === isBusy) return;
+  // Only the newest message follows the agent; a browsed older message is
+  // already complete and must not be replaced.
+  if (sessionIndex >= sessionMessages.length - 1) renderSessionMessage();
+}
+
+/**
+ * Records a session in the in-memory recent list (max 15, newest first).
+ * @param {object} session Session just selected.
+ * @sideeffect Replaces `sessionHistory`.
+ */
+function rememberSession(session) {
+  sessionHistory = sessionHistory.filter((item) => item.id !== session.id);
+  sessionHistory.unshift({ id: session.id, title: session.title, agent: session.agent, at: Date.now() });
+  if (sessionHistory.length > 15) sessionHistory.length = 15;
+}
+
+/**
+ * Loads a session's messages and renders its newest one.
+ * @param {object} session Session summary chosen in the sidebar.
+ * @returns {Promise<void>} Resolves after the fetch attempt.
+ * @sideeffect Resets clipboard browsing, updates `selectedSession`,
+ *   `sessionMessages` and the status line.
+ */
+async function selectSession(session) {
+  if (!session) return;
+  source = 'session';
+  selectedSession = session;
+  historyIndex = -1;      // leave clipboard browsing
+  ++historyRequest;       // cancel in-flight clipboard renders
+  ++renderRequest;
+  sessionMessages = [];
+  sessionIndex = -1;
+  sessionTextHash = '';
+  sessionFollow = true;
+  sessionFollowBtn.textContent = 'Follow: on';
+  sessionFollowBtn.classList.add('active');
+  updateSessionControls();
+  statusEl.textContent = 'Cargando sesión…';
+  statusEl.style.color = 'rgba(166,172,200,0.5)';
+  const request = ++sessionRequest;
+  try {
+    const response = await fetch('/session?id=' + encodeURIComponent(session.id));
+    if (!response.ok) throw new Error('session load failed');
+    const detail = await response.json();
+    if (request !== sessionRequest || source !== 'session') return;
+    selectedSession = Object.assign({}, session, {
+      title: detail.title || session.title,
+      agent: detail.agent || session.agent,
+      directory: detail.directory || session.directory,
+    });
+    sessionMessages = detail.messages || [];
+    rememberSession(selectedSession);
+    if (sessionMessages.length) {
+      sessionIndex = sessionMessages.length - 1;
+      renderSessionMessage();
+    } else {
+      showSessionPlaceholder('Esta sesión no tiene mensajes de texto.');
+    }
+    updateSessionControls();
+    renderSessionsList();
+  } catch (e) {
+    statusEl.textContent = 'No se pudo cargar la sesión';
+    statusEl.style.color = '#f38ba8';
+  }
+}
+
+/**
+ * Returns the message currently displayed in the session viewer.
+ * @returns {object|null} message at sessionIndex, or null when out of range
+ */
+function currentSessionMessage() {
+  return sessionMessages[sessionIndex] || null;
+}
+
+/**
+ * Builds the renderable text of a session message; user turns become quotes
+ * so they read as transcript context rather than agent output.
+ * @param {object|null} message
+ * @returns {string} text to feed renderDocument
+ */
+function sessionMessageSource(message) {
+  if (!message) return '';
+  if (message.role === 'user') {
+    const quote = (message.preview || message.text || '').trim();
+    return quote ? '> ' + quote : '';
+  }
+  return message.text || '';
+}
+
+/**
+ * Pins the render pane to its last line.
+ * @returns {void}
+ */
+function scrollRenderToBottom() {
+  renderView.scrollTop = renderView.scrollHeight;
+}
+
+/**
+ * Detects that the reader scrolled away from the bottom, which suppresses
+ * auto-follow on new content.
+ * @returns {boolean} true when more than 40px of content remain below the fold
+ */
+function isScrolledUp() {
+  return renderView.scrollHeight - renderView.scrollTop - renderView.clientHeight > 40;
+}
+
+/**
+ * Replaces the render pane with a single placeholder sentence.
+ * @param {string} text message shown to the reader
+ * @returns {void}
+ */
+function showSessionPlaceholder(text) {
+  renderView.innerHTML = '<div class="placeholder-text">' + escPreserve(text) + '</div>';
+}
+
+/**
+ * Reports whether the selected session's agent still has work in flight.
+ * @returns {boolean} true when a session is selected and marked busy
+ */
+// While the selected session's agent is busy, its newest message is either the
+// user's own pasted text or a half-written answer.  Rendering that in-progress
+// content reads as malformed clipboard output, so expose a clean placeholder
+// until the real result is ready.
+function isSessionBusy() {
+  return source === 'session' && !!selectedSession && selectedSession.state === 'busy';
+}
+
+/**
+ * Announces the busy state in the status bar while keeping the last rendered
+ * document on screen.
+ * @returns {void}
+ */
+function showLoading() {
+  // Keep the last rendered document visible; the busy state is announced in
+  // the status bar only, so the overlay stays useful while an agent works.
+  statusEl.textContent = 'Agente trabajando…';
+  statusEl.style.color = '#f9e2af';
+}
+
+/**
+ * Renders the message at sessionIndex; the newest message stays behind the
+ * busy guard until the agent answer is complete.
+ * @returns {void}
+ */
+function renderSessionMessage() {
+  const message = currentSessionMessage();
+  if (!message) {
+    showSessionPlaceholder('Esta sesión no tiene mensajes de texto.');
+    updateSessionControls();
+    return;
+  }
+  // Busy guard: apply only while the newest message is on screen.  Browsing
+  // older messages with Alt+← must keep showing complete, finished text.
+  if (sessionIndex >= sessionMessages.length - 1 && isSessionBusy()) {
+    showLoading();
+    if (selectedSession) {
+      const prefix = selectedSession.agent ? selectedSession.agent + ' · ' : '';
+      statusEl.textContent = prefix + (selectedSession.title || 'Sesión');
+      statusEl.style.color = '#f9e2af';
+    }
+    scrollRenderToBottom();
+    updateSessionControls();
+    return;
+  }
+  const text = sessionMessageSource(message);
+  if (!text.trim()) {
+    showSessionPlaceholder('Este mensaje no tiene texto. Usa ‹ para volver al anterior.');
+  } else {
+    renderDocument(text);
+  }
+  if (selectedSession) {
+    const prefix = message.role === 'user' ? 'Tú · ' : (selectedSession.agent ? selectedSession.agent + ' · ' : '');
+    statusEl.textContent = prefix + (selectedSession.title || 'Sesión');
+    statusEl.style.color = message.role === 'user' ? '#f9e2af' : '#89b4fa';
+  }
+  scrollRenderToBottom();
+  updateSessionControls();
+}
+
+/**
+ * Syncs the session navigation bar with the current position and toggles the
+ * clipboard controls off while a session owns the view.
+ * @returns {void}
+ */
+function updateSessionControls() {
+  const isSession = source === 'session';
+  clipboardControls.style.display = isSession ? 'none' : 'flex';
+  sessionControls.style.display = isSession ? 'flex' : 'none';
+  if (!isSession) return;
+  sessionPosition.textContent = sessionMessages.length ? (sessionIndex + 1) + '/' + sessionMessages.length : '-/-';
+  sessionPrevBtn.disabled = sessionIndex <= 0;
+  sessionNextBtn.disabled = sessionIndex < 0 || sessionIndex >= sessionMessages.length - 1;
+  sessionFollowBtn.textContent = 'Follow: ' + (sessionFollow ? 'on' : 'off');
+  sessionFollowBtn.classList.toggle('active', sessionFollow);
+}
+
+/**
+ * Steps one message back in the session transcript and reads it top-down.
+ * @returns {void}
+ */
+function showOlderSessionMessage() {
+  if (source !== 'session' || sessionIndex <= 0) return;
+  sessionIndex--;
+  renderSessionMessage();
+  renderView.scrollTop = 0; // older messages read top-down
+}
+
+/**
+ * Steps one message forward in the session transcript.
+ * @returns {void}
+ */
+function showNewerSessionMessage() {
+  if (source !== 'session' || sessionIndex < 0 || sessionIndex >= sessionMessages.length - 1) return;
+  sessionIndex++;
+  renderSessionMessage();
+}
+
+/**
+ * Polls the selected session and repaints only when the reader is already on
+ * the newest message and at the bottom of the document.
+ * @returns {Promise<void>}
+ */
+async function followSelectedSession() {
+  if (editMode || source !== 'session' || !selectedSession || !sessionFollow) return;
+  const request = sessionRequest;
+  try {
+    const response = await fetch('/session?id=' + encodeURIComponent(selectedSession.id));
+    if (!response.ok) return;
+    const detail = await response.json();
+    if (request !== sessionRequest || source !== 'session') return;
+    const messages = detail.messages || [];
+    if (!messages.length) return;
+    const last = messages[messages.length - 1];
+    const hash = last.role + '\u0000' + (last.text || '');
+    const wasAtLast = sessionIndex >= sessionMessages.length - 1;
+    const atBottom = !isScrolledUp();
+    sessionMessages = messages;
+    if (sessionIndex > messages.length - 1) sessionIndex = messages.length - 1;
+    if (hash !== sessionTextHash) {
+      sessionTextHash = hash;
+      if (wasAtLast && atBottom) {
+        sessionIndex = messages.length - 1;
+        renderSessionMessage();
+      }
+    }
+    updateSessionControls();
+  } catch (e) {}
+}
+
+// ── Clipboard history navigation ──
+
+/**
+ * Enables or disables the history buttons and writes the position/preview
+ * labels for the current browsing state.
+ * @returns {void}
+ */
+function updateHistoryControls() {
+  const browsing = historyIndex >= 0;
+  historyPosition.textContent = browsing ? `${historyIndex + 1}/${history.length}` : 'Live';
+  historyPreview.textContent = browsing && history[historyIndex] ? history[historyIndex].preview : '';
+  historyPrev.disabled = history.length === 0 || historyIndex >= history.length - 1;
+  historyNext.disabled = !browsing;
+  historyCopy.disabled = !browsing;
+  historyDelete.disabled = !browsing;
+  historyLive.style.display = browsing ? 'inline-block' : 'none';
+  if (source === 'session') return;
+  statusEl.textContent = browsing ? 'Browsing history' : 'Watching clipboard...';
+  statusEl.style.color = browsing ? '#f9e2af' : 'rgba(166,172,200,0.5)';
+}
+
+/**
+ * Reloads the server-side history list and repaints its panel.
+ * @returns {Promise<void>}
+ */
+async function loadHistory() {
+  try {
+    const response = await fetch('/history');
+    if (!response.ok) return;
+    history = await response.json();
+    if (historyIndex >= history.length) historyIndex = history.length - 1;
+    updateHistoryControls();
+    renderHistoryList();
+  } catch (e) {}
+}
+
+/**
+ * Switches the overlay to a stored clipboard entry and renders it.
+ * @param {number} index history position to show, clamped to the list bounds
+ * @returns {Promise<void>}
+ */
+async function browseHistory(index) {
+  await loadHistory();
+  if (!history.length) return;
+  source = 'clipboard';
+  historyIndex = Math.max(0, Math.min(index, history.length - 1));
+  updateSessionControls();
+  const request = ++historyRequest;
+  try {
+    const response = await fetch('/history/get?id=' + encodeURIComponent(history[historyIndex].id));
+    if (!response.ok) return;
+    const text = await response.text();
+    if (request !== historyRequest) return;
+    latexSource = text;
+    // A historical item must not be mistaken for the live clipboard.  The
+    // history view owns rendering until goLive() is selected.
+    renderDocument(text);
+    updateHistoryControls();
+    renderHistoryList();
+  } catch (e) {}
+}
+
+/**
+ * Leaves history browsing, cancels pending requests and repaints the live
+ * clipboard content immediately.
+ * @returns {void}
+ */
+function goLive() {
+  source = 'clipboard';
+  historyIndex = -1;
+  ++historyRequest;
+  ++renderRequest;
+  ++sessionRequest;
+  updateHistoryControls();
+  updateSessionControls();
+  renderHistoryList();
+  // Returning to Live must repaint immediately.  Otherwise the last
+  // historical document remains visible until the clipboard changes again.
+  fetch('/clipboard').then(response => response.ok ? response.text() : '')
+    .then(text => {
+      if (!text || historyIndex >= 0 || editMode || source !== 'clipboard') return;
+      lastClipboard = text;
+      latexSource = text;
+      renderDocument(text);
+    }).catch(() => {});
+}
+
+/**
+ * Copies the browsed history entry back into the system clipboard.
+ * @returns {Promise<void>}
+ */
+async function copyHistorical() {
+  if (historyIndex < 0 || !history[historyIndex]) return;
+  try {
+    const response = await fetch('/copy', { method: 'POST', headers: { 'Content-Type': 'text/plain; charset=utf-8' }, body: latexSource });
+    if (!response.ok) throw new Error();
+    statusEl.textContent = 'Historical clipboard copied';
+  } catch (e) { statusEl.textContent = 'Copy failed'; }
+}
+
+/**
+ * Deletes the browsed history entry and shows the neighbouring one.
+ * @returns {Promise<void>}
+ */
+async function deleteHistorical() {
+  if (historyIndex < 0 || !history[historyIndex]) return;
+  try {
+    const response = await fetch('/history/delete?id=' + encodeURIComponent(history[historyIndex].id));
+    if (!response.ok) return;
+    const next = historyIndex >= history.length - 1 ? historyIndex - 1 : historyIndex;
+    await loadHistory();
+    if (history.length) await browseHistory(Math.max(0, next)); else goLive();
+  } catch (e) {}
+}
+
+/**
+ * Deletes one history entry by position and keeps browsing consistent.
+ * @param {number} index Position in `history`.
+ * @returns {Promise<void>}
+ */
+async function deleteHistoryEntry(index) {
+  const entry = history[index];
+  if (!entry) return;
+  try {
+    const response = await fetch('/history/delete?id=' + encodeURIComponent(entry.id));
+    if (!response.ok) return;
+    const wasSelected = historyIndex === index;
+    if (wasSelected) { historyIndex = -1; ++historyRequest; }
+    else if (historyIndex > index) historyIndex--;
+    await loadHistory();
+    if (wasSelected && history.length) await browseHistory(Math.min(index, history.length - 1));
+    else if (historyIndex >= 0) await browseHistory(historyIndex);
+    else updateHistoryControls();
+  } catch (e) {}
+}
+
+/**
+ * Restores the last deleted entry from the server trash.
+ * @returns {Promise<void>}
+ */
+async function undoLastDeletion() { try { const response = await fetch('/history/undo'); if (!response.ok) throw new Error(); await loadHistory(); await loadTrash(); goLive(); statusEl.textContent = 'Último borrado restaurado'; } catch (_) { statusEl.textContent = 'No hay borrado para deshacer'; } }
+
+// ── History panel wiring ──
+historyList.addEventListener('click', (event) => {
+  if (sidebarView !== 'history') return;
+  const row = event.target.closest('.history-entry');
+  if (!row) return;
+  const index = Number(row.dataset.index);
+  if (event.target.closest('.history-delete')) {
+    event.stopPropagation();
+    deleteHistoryEntry(index);
+  } else {
+    browseHistory(index);
+  }
+});
+historyToggle.addEventListener('click', () => {
+  historySidebar.classList.toggle('collapsed');
+  historyToggle.classList.toggle('active', !historySidebar.classList.contains('collapsed'));
+});
+sessionsTab.addEventListener('click', () => showSidebar('sessions'));
+historyTab.addEventListener('click', () => showSidebar('history'));
+trashTab.addEventListener('click', () => showSidebar('trash'));
+historyUndo.addEventListener('click', undoLastDeletion);
+historyList.addEventListener('click', async (event) => {
+  if (sidebarView !== 'trash') return;
+  const row = event.target.closest('.history-entry'); if (!row) return;
+  const id = encodeURIComponent(row.dataset.id);
+  if (event.target.title === 'Restaurar') { const response = await fetch('/trash/restore?id=' + id); if (response.ok) { await loadTrash(); await loadHistory(); goLive(); } }
+  if (event.target.title === 'Borrar permanentemente') { if (!confirm('Borrado permanente: este elemento no podrá restaurarse. ¿Continuar?')) return; const response = await fetch('/trash/delete?id=' + id); if (response.ok) loadTrash(); }
+});
+historyList.addEventListener('click', (event) => {
+  if (sidebarView !== 'sessions') return;
+  const row = event.target.closest('.history-entry');
+  if (!row || !row.dataset.sessionId) return;
+  const session = sessions.find((item) => item.id === row.dataset.sessionId);
+  if (session) selectSession(session);
+});
+subagentToggle.addEventListener('change', () => {
+  showSubagents = subagentToggle.checked;
+  renderSessionsList();
+  loadSessions();
+});
+sessionPrevBtn.addEventListener('click', showOlderSessionMessage);
+sessionNextBtn.addEventListener('click', showNewerSessionMessage);
+sessionFollowBtn.addEventListener('click', () => { sessionFollow = !sessionFollow; updateSessionControls(); });
+sessionClipboardBtn.addEventListener('click', () => { goLive(); showSidebar('history'); });
+
+let wipeArmed = false;
+historyWipe.addEventListener('click', async () => {
+  if (!wipeArmed) { wipeArmed = true; historyWipe.textContent = 'Sure?'; setTimeout(() => { wipeArmed = false; historyWipe.textContent = 'Clear'; }, 2500); return; }
+  const response = await fetch('/history/wipe');
+  if (response.ok) { history = []; goLive(); historyWipe.textContent = 'Cleared'; setTimeout(() => historyWipe.textContent = 'Clear', 1200); }
+  wipeArmed = false;
+});
+trashWipe.addEventListener('click', async () => { if (!trash.length) return; if (!confirm('VACÍAR PAPELERA: se eliminarán permanentemente todos sus elementos y no podrán restaurarse. ¿Confirmas?')) return; const response = await fetch('/trash/wipe'); if (response.ok) { await loadTrash(); statusEl.textContent = 'Papelera vaciada permanentemente'; } });
+historyPrev.addEventListener('click', () => browseHistory(historyIndex < 0 ? 0 : historyIndex + 1));
+historyNext.addEventListener('click', () => historyIndex > 0 ? browseHistory(historyIndex - 1) : goLive());
+historyLive.addEventListener('click', goLive);
+historyCopy.addEventListener('click', copyHistorical);
+historyDelete.addEventListener('click', deleteHistorical);
+
+/**
+ * Switches between edit and render mode, syncing the textarea with the source.
+ * @returns {void}
+ */
+function toggleMode() {
+  editMode = !editMode;
+  if (editMode) {
+    editView.classList.add('visible');
+    renderView.classList.add('hidden');
+    modeBtn.textContent = 'View';
+    modeBtn.classList.add('active');
+    if (source === 'session') {
+      inputEl.value = sessionMessageSource(currentSessionMessage());
+    } else {
+      inputEl.value = latexSource;
+    }
+    inputEl.focus();
+  } else {
+    editView.classList.remove('visible');
+    renderView.classList.remove('hidden');
+    modeBtn.textContent = 'Edit';
+    modeBtn.classList.remove('active');
+    latexSource = inputEl.value;
+    if (source === 'session' && sessionIndex >= 0 && sessionMessages[sessionIndex]) {
+      sessionMessages[sessionIndex].text = inputEl.value;
+      renderSessionMessage();
+    } else {
+      renderDocument(latexSource);
+    }
+  }
+}
+
+let debounceTimer = null;
+inputEl.addEventListener('input', () => {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    latexSource = inputEl.value;
+  }, 100);
+});
+
+// ── Clipboard polling ──
+setInterval(async () => {
+  if (editMode || historyIndex >= 0 || source === 'session') return;
+  try {
+    const resp = await fetch('/clipboard');
+    if (!resp.ok) return;
+    const text = await resp.text();
+      if (text && text !== lastClipboard) {
+        lastClipboard = text;
+        // Include document-only environments, the backslash-less section typo
+        // and markdown headings, otherwise an agent response that is only
+        // prose + `##`/`###` + lists would never trigger a render.
+        if (/\$[^$]/.test(text) || /\$\$/.test(text) || /\\\[/.test(text) || /\\\(/.test(text) ||
+            /\\begin\{/.test(text) || /(?:^|\n)\s*begin\{(?:section|subsection)\}/.test(text) ||
+            /(?:^|\n)[ \t]*#{1,3}[ \t]+\S/.test(text) ||
+            /\\(?:section|subsection)\s*\{/.test(text)) {
+          latexSource = text;
+          renderDocument(text);
+        }
+    }
+  } catch (e) {}
+}, 300);
+loadHistory();
+loadTrash();
+loadSessions();
+showSidebar('sessions');
+setInterval(() => { if (historyIndex < 0 && !editMode && source !== 'session') loadHistory(); }, 2000);
+// Sessions list: always poll so open/closed badges stay fresh and the
+// clipboard busy gate reacts even when the sidebar is not on "Sesiones".
+setInterval(loadSessions, 2000);
+setInterval(followSelectedSession, 1500);
+
+// ── Parse / render pipeline ──
+// ── Parse all LaTeX math delimiters ──
+// Handles: $$, \[, \begin{env}, $, \(
+/**
+ * Finds the closing tag matching an opening one, honouring nesting depth.
+ * @param {string} str Text to scan.
+ * @param {number} pos Offset just past the opening tag.
+ * @param {string} openTag Opening delimiter.
+ * @param {string} closeTag Closing delimiter.
+ * @returns {number} Index of the matching close, or -1.
+ */
+function findMatchingClose(str, pos, openTag, closeTag) {
+  let depth = 1, searchPos = pos;
+  while (searchPos < str.length && depth > 0) {
+    const nextOpen  = str.indexOf(openTag,  searchPos);
+    const nextClose = str.indexOf(closeTag, searchPos);
+    if (nextClose === -1) return -1;
+    if (nextOpen !== -1 && nextOpen < nextClose) { depth++; searchPos = nextOpen + openTag.length; }
+    else { depth--; if (depth === 0) return nextClose; searchPos = nextClose + closeTag.length; }
+  }
+  return -1;
+}
+
+/**
+ * Splits text into a marker-annotated string plus the math segments it replaced.
+ * @param {string} text Raw document text.
+ * @returns {{text: string, segs: Array<{c: string, d: boolean}>}} Marked text and segments.
+ */
+function extractMath(text) {
+  const segs = [];
+  let result = '';
+  let pos = 0;
+
+  while (pos < text.length) {
+    let earliest = null;
+
+    // 1. $$ (display)
+    let idx = text.indexOf('$$', pos);
+    if (idx !== -1) earliest = { pos: idx, type: 'dblDollar', display: true, openerLen: 2 };
+
+    // 2. \[ (display)
+    idx = text.indexOf('\\[', pos);
+    if (idx !== -1 && (!earliest || idx < earliest.pos))
+      earliest = { pos: idx, type: 'dblBracket', display: true, openerLen: 2 };
+
+    // 3. \begin{NAME} (display)
+    // Lists are document structure, not KaTeX environments.  Leave them in
+    // the text stream so renderDocument can turn them into real HTML lists.
+    const beginRe = /\\begin\{(\w+)(?:\*)?\}/g;
+    beginRe.lastIndex = pos;
+    const beginMatch = beginRe.exec(text);
+    if (beginMatch) {
+      const absPos = beginMatch.index;
+      if (!['itemize', 'enumerate'].includes(beginMatch[1]) &&
+          (!earliest || absPos < earliest.pos)) {
+        const envName = beginMatch[1] + (beginMatch[0].endsWith('*}') ? '*' : '');
+        earliest = { pos: absPos, type: 'beginEnv', display: true,
+                     openerLen: beginMatch[0].length,
+                     envName: envName,
+                     closeTag: '\\end{' + envName + '}' };
+      }
+    }
+
+    // 4. $ (inline, skip \$ and $$)
+    let sglPos = -1;
+    let sp = pos;
+    while (sp < text.length) {
+      const d = text.indexOf('$', sp);
+      if (d === -1) break;
+      if (d > 0 && text[d - 1] === '\\') { sp = d + 1; continue; }
+      if (d + 1 < text.length && text[d + 1] === '$') { sp = d + 2; continue; }
+      sglPos = d; break;
+    }
+    if (sglPos !== -1 && (!earliest || sglPos < earliest.pos))
+      earliest = { pos: sglPos, type: 'sglDollar', display: false, openerLen: 1 };
+
+    // 5. \( (inline)
+    idx = text.indexOf('\\(', pos);
+    if (idx !== -1 && (!earliest || idx < earliest.pos))
+      earliest = { pos: idx, type: 'sglParen', display: false, openerLen: 2 };
+
+    if (!earliest) { result += text.substring(pos); break; }
+
+    // Text before delimiter
+    if (earliest.pos > pos) result += text.substring(pos, earliest.pos);
+
+    // ── Extract math content ──
+    const contentStart = earliest.pos + earliest.openerLen;
+
+    if (earliest.type === 'beginEnv') {
+      // Keep \begin{…}…\end{…} tags (KaTeX needs them)
+      const envEnd = findMatchingClose(text, contentStart,
+        '\\begin{' + earliest.envName + '}', earliest.closeTag);
+      if (envEnd !== -1) {
+        segs.push({ c: text.substring(earliest.pos, envEnd + earliest.closeTag.length), d: true });
+        result += '\uE000D' + (segs.length - 1) + '\uE001';
+        pos = envEnd + earliest.closeTag.length;
+      } else {
+        segs.push({ c: text.substring(earliest.pos), d: true });
+        result += '\uE000D' + (segs.length - 1) + '\uE001';
+        pos = text.length;
+      }
+    } else if (earliest.type === 'sglDollar') {
+      // Find unescaped closing $
+      let closePos = -1;
+      let sp2 = contentStart;
+      while (sp2 < text.length) {
+        const d = text.indexOf('$', sp2);
+        if (d === -1) break;
+        if (d > 0 && text[d - 1] === '\\') { sp2 = d + 1; continue; }
+        closePos = d; break;
+      }
+      if (closePos !== -1) {
+        segs.push({ c: text.substring(contentStart, closePos), d: false });
+        result += '\uE000I' + (segs.length - 1) + '\uE001';
+        pos = closePos + 1;
+      } else {
+        result += text.substring(earliest.pos);
+        pos = text.length;
+      }
+    } else {
+      // $$, \[, \( — strip delimiters
+      const closer = earliest.type === 'dblDollar' ? '$$'
+                   : earliest.type === 'dblBracket' ? '\\]'
+                   : '\\)';
+      const marker = earliest.display ? '\uE000D' : '\uE000I';
+      const closePos = text.indexOf(closer, contentStart);
+      if (closePos !== -1) {
+        segs.push({ c: text.substring(contentStart, closePos), d: earliest.display });
+        result += marker + (segs.length - 1) + '\uE001';
+        pos = closePos + 2;
+      } else {
+        segs.push({ c: text.substring(contentStart), d: earliest.display });
+        result += marker + (segs.length - 1) + '\uE001';
+        pos = text.length;
+      }
+    }
+  }
+
+  return { text: result, segs };
+}
+
+/**
+ * Escapes HTML metacharacters without collapsing whitespace.
+ * @param {string} s Text to escape.
+ * @returns {string} Escaped text.
+ */
+function escPreserve(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+/**
+ * Applies bold, italic and inline-code markdown to already escaped HTML.
+ * @param {string} html Escaped HTML fragment.
+ * @returns {string} Fragment with inline formatting tags.
+ */
+function inlineFmt(html) {
+  return html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+             .replace(/\*(.+?)\*/g, '<em>$1</em>')
+             .replace(/`([^`]+)`/g, '<code>$1</code>');
+}
+
+/**
+ * Repairs the common missing-backslash section spelling.
+ * @param {string} text Source text.
+ * @returns {string} Text with standard section commands.
+ */
+// Clipboard text occasionally loses the backslash from `\\begin{section}`.
+// Treat that spelling as the author's intended standard section command.
+function normalizeSectionCommands(text) {
+  return text
+    .replace(/\\?begin\{(section|subsection)\}\s*(?=\{)/g, '\\$1')
+    .replace(/\\?end\{(section|subsection)\}/g, '');
+}
+
+/**
+ * Reads the braced title of a section/subsection command.
+ * @param {string} command Line starting with the command.
+ * @returns {{level: number, title: string, rest: string}|null} Heading parts, or null.
+ */
+function bracedArgument(command) {
+  const match = command.match(/^\\(section|subsection)\s*\{/);
+  if (!match) return null;
+  let depth = 1;
+  for (let i = match[0].length; i < command.length; i++) {
+    if (command[i] === '{') depth++;
+    else if (command[i] === '}' && --depth === 0)
+      return { level: match[1] === 'section' ? 2 : 3,
+               title: command.substring(match[0].length, i), rest: command.substring(i + 1) };
+  }
+  return null;
+}
+
+/**
+ * Renders one extracted math segment into a span.
+ * @param {{c: string, d: boolean}} seg Segment source and display flag.
+ * @returns {HTMLSpanElement} KaTeX output, or an error note element.
+ */
+function renderMath(seg) {
+  const el = document.createElement('span');
+  try {
+    katex.render(seg.c, el, { displayMode: seg.d, throwOnError: false, trust: true, strict: false });
+  } catch (e) {
+    // Never let KaTeX's throwOnError=false fallback inject the raw source
+    // into the document (it is styled red and looks like a source panel).
+    // The source remains available only through Edit/Copy and history actions.
+    el.className = 'math-error';
+    el.textContent = 'No se pudo renderizar esta expresión';
+  }
+  return el;
+}
+
+/**
+ * Swaps math markers for rendered nodes, recursing into element children.
+ * @param {Node} node Subtree to walk.
+ * @param {Array<{c: string, d: boolean}>} segs Segments by marker index.
+ * @returns {void}
+ */
+function replaceMarkers(node, segs) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    const text = node.textContent;
+    if (text.indexOf('\uE000') === -1) return;
+    const regex = /\uE000([DI])(\d+)\uE001/g;
+    const frag = document.createDocumentFragment();
+    let lastIdx = 0, match;
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIdx) frag.appendChild(document.createTextNode(text.substring(lastIdx, match.index)));
+      const idx = parseInt(match[2]);
+      const seg = segs[idx];
+      if (seg) {
+        if (match[1] === 'D') { const w = document.createElement('div'); w.className = 'display-math'; w.appendChild(renderMath(seg)); frag.appendChild(w); }
+        else { frag.appendChild(renderMath(seg)); }
+      }
+      lastIdx = regex.lastIndex;
+    }
+    if (lastIdx < text.length) frag.appendChild(document.createTextNode(text.substring(lastIdx)));
+    if (frag.childNodes.length > 0) node.parentNode.replaceChild(frag, node);
+  } else if (node.nodeType === Node.ELEMENT_NODE) {
+    if (node.classList && (node.classList.contains('katex') || node.classList.contains('math-error'))) return;
+    Array.from(node.childNodes).forEach(child => replaceMarkers(child, segs));
+  }
+}
+
+// ── Main render ──
+/**
+ * Renders raw text into the render pane, resolving math, tables and lists.
+ * @param {string} rawText Source text as copied or typed.
+ * @returns {void}
+ */
+function renderDocument(rawText) {
+  const request = ++renderRequest;
+  if (!rawText.trim()) {
+    renderView.innerHTML = '<div class="placeholder-text">Copy any text with LaTeX delimiters<br>and it will render here automatically.</div>';
+    statusEl.textContent = 'Watching clipboard...'; statusEl.style.color = 'rgba(166,172,200,0.5)';
+    return;
+  }
+
+  // Normalize only the rendering copy; copying/history continue to expose the
+  // exact clipboard source.
+  const { text, segs } = extractMath(normalizeSectionCommands(rawText));
+  const lines = text.split('\n');
+  let html = '';
+  let i = 0;
+
+  const isTabRow = (l) => l.includes('\t') && l.split('\t').filter(c => c.trim()).length >= 2;
+  // A pipe is not sufficient to make a table: prose and LaTeX commonly use
+  // it.  Markdown tables have a separator row immediately after the header.
+  const isPipeRow = (l) => {
+    const cells = l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|');
+    return cells.length >= 2 && cells.every(c => c.trim());
+  };
+  const isSepRow = (l) => /^\|?[\s]*:?-+:?[\s]*(\|[\s]*:?-+:?[\s]*)*\|?$/.test(l.trim());
+
+  let tableRows = [], tableType = null, pipeAlignments = [];
+
+  const flushTable = () => {
+    if (tableRows.length === 0) return;
+    if (tableType === 'tab') {
+      html += '<table><thead><tr>';
+      tableRows[0].forEach(c => { html += '<th>' + inlineFmt(escPreserve(c.trim())) + '</th>'; });
+      html += '</tr></thead><tbody>';
+      for (let r = 1; r < tableRows.length; r++) { html += '<tr>'; tableRows[r].forEach(c => { html += '<td>' + inlineFmt(escPreserve(c.trim())) + '</td>'; }); html += '</tr>'; }
+      html += '</tbody></table>';
+    } else if (tableType === 'pipe') {
+      html += '<table><thead><tr>';
+      tableRows[0].forEach((c, ci) => { html += '<th style="text-align:' + (pipeAlignments[ci]||'left') + '">' + inlineFmt(escPreserve(c.trim())) + '</th>'; });
+      html += '</tr></thead><tbody>';
+      for (let r = 1; r < tableRows.length; r++) { html += '<tr>'; tableRows[r].forEach((c, ci) => { html += '<td style="text-align:' + (pipeAlignments[ci]||'left') + '">' + inlineFmt(escPreserve(c.trim())) + '</td>'; }); html += '</tr>'; }
+      html += '</tbody></table>';
+    }
+    tableRows = []; tableType = null; pipeAlignments = [];
+  };
+
+  while (i < lines.length) {
+    const line = lines[i], trimmed = line.trim();
+
+    if (/^---+$/.test(trimmed)) { flushTable(); html += '<hr>'; i++; continue; }
+
+    const pipeTableStarts = isPipeRow(trimmed) && i + 1 < lines.length && isSepRow(lines[i + 1]);
+    if (tableType === 'pipe' && isSepRow(trimmed)) {
+      pipeAlignments = trimmed.split('|').filter(c => c.trim()).map(c => { c = c.trim(); if (c.startsWith(':') && c.endsWith(':')) return 'center'; if (c.endsWith(':')) return 'right'; return 'left'; });
+      i++;
+      continue;
+    }
+
+    if ((pipeTableStarts || (tableType === 'pipe' && isPipeRow(trimmed))) && tableType !== 'tab') {
+      if (tableType !== 'pipe') { flushTable(); tableType = 'pipe'; }
+       tableRows.push(trimmed.split('|').map(c => c.trim()).filter((c, idx, arr) => !(idx === 0 && c === '') && !(idx === arr.length - 1 && c === '')));
+       i++; continue;
+    }
+
+    if (isTabRow(line) && tableType !== 'pipe') { if (tableType !== 'tab') { flushTable(); tableType = 'tab'; } tableRows.push(line.split('\t')); i++; continue; }
+
+    if (tableType) { flushTable(); }
+
+    // OpenCode quotes the user's own text with a leading ">".  Group the whole
+    // run into one blockquote; math markers were extracted beforehand, so
+    // stripping "> " leaves them intact for replaceMarkers to resolve in place
+    // (it recurses into the generated elements).  Must stay after the table
+    // and hr rules so it cannot swallow "---" or pipe/tab tables.
+    if (/^>/.test(trimmed)) {
+      html += '<blockquote>';
+      while (i < lines.length && /^>/.test(lines[i].trim())) {
+        const quote = lines[i].trim().replace(/^>[ \t]?/, '');
+        if (/^\uE000D\d+\uE001$/.test(quote)) html += '<div class="display-math">' + escPreserve(quote) + '</div>';
+        else html += '<p>' + inlineFmt(escPreserve(quote)) + '</p>';
+        i++;
+      }
+      html += '</blockquote>';
+      continue;
+    }
+
+    if (/^\uE000D\d+\uE001$/.test(trimmed)) { html += '<div class="display-math">' + escPreserve(trimmed) + '</div>'; i++; continue; }
+
+    // Standard LaTeX headings (and the common clipboard typo begin{section}).
+    const heading = bracedArgument(trimmed);
+    if (heading) {
+      html += '<h' + heading.level + '>' + inlineFmt(escPreserve(heading.title)) + '</h' + heading.level + '>';
+      if (heading.rest.trim()) html += '<p>' + inlineFmt(escPreserve(heading.rest.trim())) + '</p>';
+      i++; continue;
+    }
+
+    // Render itemize/enumerate as document structure.  Their contents still
+    // contain private math markers, which replaceMarkers resolves afterwards.
+    // Lists are document structure, not KaTeX environments. Consume the
+    // matching end marker here so it cannot fall through as visible text
+    // after inline-math segments have been extracted.
+    const listStart = trimmed.match(/^\\begin\{(itemize|enumerate)\}\s*$/);
+    if (listStart) {
+      const tag = listStart[1] === 'enumerate' ? 'ol' : 'ul';
+      html += '<' + tag + '>';
+      i++;
+      let item = null;
+      const listEnd = new RegExp('^\\\\end\\\\{' + listStart[1] + '\\}\\s*$');
+      while (i < lines.length && !listEnd.test(lines[i].trim())) {
+        const itemMatch = lines[i].trim().match(/^\\item\s*(.*)$/);
+        if (itemMatch) {
+          if (item !== null) html += '<li>' + inlineFmt(escPreserve(item)) + '</li>';
+          item = itemMatch[1];
+        } else if (item !== null && lines[i].trim()) {
+          item += '\n' + lines[i];
+        }
+        i++;
+      }
+      if (item !== null) html += '<li>' + inlineFmt(escPreserve(item)) + '</li>';
+      if (i < lines.length) i++;
+      html += '</' + tag + '>';
+      continue;
+    }
+
+    // Defensive recovery for clipboard fragments containing a stray end tag.
+    if (/^\\end\{(?:itemize|enumerate)\}\s*$/.test(trimmed)) { i++; continue; }
+
+    const hMatch = trimmed.match(/^(#{1,3})\s+(.*)/);
+    if (hMatch) { html += '<h' + hMatch[1].length + '>' + inlineFmt(escPreserve(hMatch[2])) + '</h' + hMatch[1].length + '>'; i++; continue; }
+
+    if (/^[\-\*]\s+/.test(trimmed)) { html += '<ul>'; while (i < lines.length && /^[\-\*]\s+/.test(lines[i].trim())) { html += '<li>' + inlineFmt(escPreserve(lines[i].trim().replace(/^[\-\*]\s+/, ''))) + '</li>'; i++; } html += '</ul>'; continue; }
+
+    if (/^\d+\.\s+/.test(trimmed)) { html += '<ol>'; while (i < lines.length && /^\d+\.\s+/.test(lines[i].trim())) { html += '<li>' + inlineFmt(escPreserve(lines[i].trim().replace(/^\d+\.\s+/, ''))) + '</li>'; i++; } html += '</ol>'; continue; }
+
+    if (trimmed === '') { html += '<div class="line-break"></div>'; i++; continue; }
+
+    // Keep the original line, rather than trim(), so clipboard notes retain
+    // line breaks, indentation, and the complete non-table content.
+    html += '<p>' + inlineFmt(escPreserve(line)) + '</p>';
+    i++;
+  }
+
+  if (tableType) flushTable();
+
+  const container = document.createElement('div');
+  container.className = 'doc';
+  container.innerHTML = html;
+  replaceMarkers(container, segs);
+
+  // Build off-screen and replace in one operation.  This prevents a stale
+  // clipboard/history response from briefly displaying source/error markup.
+  if (request !== renderRequest) return;
+
+  renderView.innerHTML = '';
+  renderView.appendChild(container);
+
+  const errors = container.querySelectorAll('.math-error');
+  statusEl.textContent = errors.length > 0 ? '✗ Error' : '✓ Rendered';
+  statusEl.style.color = errors.length > 0 ? '#f38ba8' : '#a6e3a1';
+}
+
+copyBtn.addEventListener('click', async () => {
+  if (!latexSource.trim()) { statusEl.textContent = 'Nothing to copy'; statusEl.style.color = '#f38ba8'; return; }
+  // Route through the server so it can drop a suppress marker before wl-copy;
+  // this is the only copy button path (no navigator.clipboard/execCommand
+  // fallback that would bypass the cliphist guard).
+  try {
+    const response = await fetch('/copy', { method: 'POST', headers: { 'Content-Type': 'text/plain; charset=utf-8' }, body: latexSource });
+    if (!response.ok) throw new Error('copy failed');
+    copyBtn.textContent = 'Copied!'; copyBtn.classList.add('copied');
+    statusEl.textContent = 'LaTeX copied'; statusEl.style.color = '#a6e3a1';
+    setTimeout(() => { copyBtn.textContent = 'Copy LaTeX'; copyBtn.classList.remove('copied'); }, 1500);
+  } catch (e) {
+    statusEl.textContent = 'Copy failed'; statusEl.style.color = '#f38ba8';
+  }
+});
+
+// ── Keyboard shortcuts ──
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') window.close();
+  if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); copyBtn.click(); }
+  if (e.key === 'e' && e.ctrlKey) { e.preventDefault(); toggleMode(); }
+   if (e.key === 'd' && e.ctrlKey) { e.preventDefault(); deleteHistorical(); }
+   if (e.key === 'z' && e.ctrlKey) { e.preventDefault(); undoLastDeletion(); }
+  if (e.key === 'ArrowLeft' && e.ctrlKey) { e.preventDefault(); historyPrev.click(); }
+  if (e.key === 'ArrowRight' && e.ctrlKey) { e.preventDefault(); historyNext.click(); }
+  if (e.key === 'ArrowLeft' && e.altKey) { e.preventDefault(); showOlderSessionMessage(); }
+  if (e.key === 'ArrowRight' && e.altKey) { e.preventDefault(); showNewerSessionMessage(); }
+  const typing = e.target && (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT');
+  if (e.ctrlKey && !typing) {
+    if (e.key === '=' || e.key === '+') { e.preventDefault(); applyScale(overlayScale + 0.1); }
+    if (e.key === '-') { e.preventDefault(); applyScale(overlayScale - 0.1); }
+    if (e.key === '0') { e.preventDefault(); applyScale(1); }
+  }
+});
+
+if (window.location.hash) {
+  try { latexSource = decodeURIComponent(window.location.hash.substring(1)); renderDocument(latexSource); } catch (e) {}
+}
+</script>
+</body>
+</html>

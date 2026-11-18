@@ -1,0 +1,42 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*.pyo
+.mypy_cache/
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Packaging artifacts
+*.egg-info/
+dist/
+build/
+
+# Runtime state (state dir may live inside the tree if XDG_STATE_HOME points here)
+*.log
+trash.json
+suppress.json
+session-history.json
+sessions/
+launch.log
+
+# Launchers
+*.pid
+latex-overlay-server.pid
+
+# OS / editors
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+
+# Patch leftovers
+*.orig
+*.rej
+
+# vendor/ holds the vendored KaTeX build and MUST be committed — do not ignore it.

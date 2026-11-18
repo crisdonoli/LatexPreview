@@ -1,0 +1,200 @@
+#!/usr/bin/env bash
+# ──────────────────────────────────────────────────────────────────
+# latex-preview — Popup LaTeX renderer for Wayland/X11
+#
+# Opens a lightweight browser window (app mode) with KaTeX rendering.
+# Prioritizes Chromium-based browsers (--app= mode), falls back to
+# Firefox, then Python + webkit2gtk.
+#
+# Usage:
+#   latex-preview              # Opens the popup
+#   latex-preview "\frac{a}{b}" # Opens with initial LaTeX
+#
+# External dependencies:
+#   required: bash, coreutils, python3 (URL encoding of the initial LaTeX)
+#   one of:   brave|google-chrome*|chromium*|microsoft-edge*|vivaldi*
+#             firefox
+#             python3 + PyGObject + WebKit2GTK/WebKitGTK
+#   optional: hyprctl (floating, resize, pin window rules)
+#
+# Side effects:
+#   Launches a detached browser window loaded with index.html from this dir.
+#   May detach a hyprctl helper that mutates window state (floating, geometry,
+#   pin). Writes nothing to disk. Exits 1 if index.html or a browser is missing.
+# ──────────────────────────────────────────────────────────────────
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+HTML_FILE="${SCRIPT_DIR}/index.html"
+
+# ── Validate HTML exists ──
+if [[ ! -f "$HTML_FILE" ]]; then
+    echo "Error: index.html not found at ${HTML_FILE}" >&2
+    exit 1
+fi
+
+# ── Build URL (optionally with initial LaTeX in hash) ──
+INITIAL_LATEX="${1:-}"
+URL="file://${HTML_FILE}"
+if [[ -n "$INITIAL_LATEX" ]]; then
+    # Encode for URL fragment
+    ENCODED=$(python3 -c "import urllib.parse; print(urllib.parse.quote('''$INITIAL_LATEX'''))" 2>/dev/null || echo "")
+    if [[ -n "$ENCODED" ]]; then
+        URL="${URL}#${ENCODED}"
+    fi
+fi
+
+# ── Window dimensions ──
+WIDTH=900
+HEIGHT=520
+
+# ── Detect available browser ──
+# Priority: Chromium-based (app mode) > Firefox > Python webkit
+# Launches the first available Chromium-based browser in chromeless --app mode.
+open_with_chromium_app() {
+    # Try each Chromium-based browser with --app= mode
+    # This creates a standalone window without tabs/toolbar
+    local browsers=(
+        "brave"
+        "google-chrome-stable"
+        "google-chrome"
+        "chromium-browser"
+        "chromium"
+        "microsoft-edge-stable"
+        "microsoft-edge"
+        "vivaldi-stable"
+        "vivaldi"
+    )
+
+    for cmd in "${browsers[@]}"; do
+        if command -v "$cmd" &>/dev/null; then
+            echo "Opening with ${cmd} (app mode)..."
+            # --app= opens a chromeless window, perfect for popups
+            # --new-window ensures a fresh instance
+            # --class sets the WM_CLASS for window rules
+            "$cmd" \
+                --app="$URL" \
+                --new-window \
+                --class=latex-preview \
+                --window-size="${WIDTH},${HEIGHT}" \
+                &>/dev/null &
+            local BROWSER_PID=$!
+
+            # Force floating via hyprctl (for Wayland/Hyprland)
+            if command -v hyprctl &>/dev/null; then
+                (sleep 0.8 && \
+                 hyprctl dispatch togglefloating "pid:${BROWSER_PID}" 2>/dev/null; \
+                 hyprctl dispatch resizeactive exact ${WIDTH} ${HEIGHT} 2>/dev/null; \
+                 hyprctl dispatch moveactive exact 47% 47% 2>/dev/null; \
+                 hyprctl dispatch pin active 2>/dev/null) &
+            fi
+
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Falls back to Firefox in a new window with explicit dimensions.
+open_with_firefox() {
+    if command -v firefox &>/dev/null; then
+        echo "Opening with Firefox..."
+        # Firefox doesn't have true app mode, but we can open a new window
+        # with a specific profile to isolate it
+        firefox \
+            --new-window \
+            --width="$WIDTH" \
+            --height="$HEIGHT" \
+            "$URL" \
+            &>/dev/null &
+        return 0
+    fi
+    return 1
+}
+
+# Last-resort native window via Python + GTK + WebKit, probing GTK4/WK6 then GTK3.
+open_with_python_webkit() {
+    # Fallback: use Python + GTK + WebKit2 for a native popup window
+    # Requires: python3, pygobject, webkit2gtk (usually packaged as
+    #           python3Packages.pygobject3 and webkitgtk_6_0 or webkitgtk_4_1)
+    if ! command -v python3 &>/dev/null; then
+        return 1
+    fi
+
+    echo "Attempting Python + WebKit2GTK fallback..."
+
+    python3 -c "import gi; gi.require_version('Gtk', '4.0'); gi.require_version('WebKit', '6.0')" 2>/dev/null
+    local gtk_ver="4.0"
+    local webkit_ver="6.0"
+
+    if [[ $? -ne 0 ]]; then
+        # Try GTK3 + WebKit2 4.1
+        python3 -c "import gi; gi.require_version('Gtk', '3.0'); gi.require_version('WebKit2', '4.1')" 2>/dev/null
+        if [[ $? -ne 0 ]]; then
+            # Try GTK3 + WebKit2 4.0
+            python3 -c "import gi; gi.require_version('Gtk', '3.0'); gi.require_version('WebKit2', '4.0')" 2>/dev/null
+            if [[ $? -ne 0 ]]; then
+                return 1
+            fi
+            gtk_ver="3.0"
+            webkit_ver="4.0"
+        else
+            gtk_ver="3.0"
+            webkit_ver="4.1"
+        fi
+    fi
+
+    python3 <<PYTHON_SCRIPT
+import gi
+gi.require_version('Gtk', '${gtk_ver}')
+gi.require_version('WebKit${webkit_ver%%.*}' if int('${gtk_ver%%.*}') >= 4 else 'WebKit2', '${webkit_ver}')
+from gi.repository import Gtk, WebKit${webkit_ver%%.*.*} if int('${gtk_ver%%.*}') >= 4 else WebKit2
+
+class LatexPreviewWindow:
+    def __init__(self):
+        self.win = Gtk.Window(title="LaTeX Preview")
+        self.win.set_default_size(${WIDTH}, ${HEIGHT})
+        self.win.connect("destroy", Gtk.main_quit)
+
+        self.webview = WebKit.WebView()
+        self.webview.load_uri("${URL}")
+        self.win.set_child(self.webview) if hasattr(self.win, 'set_child') else self.win.add(self.webview)
+        self.win.show_all() if not hasattr(self.win, 'set_child') else None
+        self.win.present() if hasattr(self.win, 'present') else self.win.show()
+
+if __name__ == "__main__":
+    LatexPreviewWindow()
+    Gtk.main()
+PYTHON_SCRIPT
+    return 0
+}
+
+# ── Try methods in order ──
+if open_with_chromium_app; then
+    exit 0
+fi
+
+if open_with_firefox; then
+    exit 0
+fi
+
+if open_with_python_webkit; then
+    exit 0
+fi
+
+# ── Nothing worked ──
+cat >&2 << 'EOF'
+Error: No suitable browser found for LaTeX Preview popup.
+
+Please install one of:
+  - A Chromium-based browser (Brave, Chrome, Chromium, Edge, Vivaldi)
+  - Firefox
+  - Or python3 with PyGObject and WebKit2GTK
+
+On NixOS, add to your configuration:
+  home.packages = [ pkgs.brave ];
+  # or:
+  environment.systemPackages = [ pkgs.chromium ];
+EOF
+exit 1

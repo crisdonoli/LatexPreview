@@ -1,0 +1,13 @@
+# The project itself needs nothing beyond the Python standard library plus
+# PyGObject (imported as `gi`). Everything else is an external system binary.
+#
+# PyGObject is the only pip-installable piece, and it compiles against system
+# headers: gobject-introspection/girepository, gtk4, webkitgtk-6.0 and
+# gtk4-layer-shell (the last one is optional at runtime).
+PyGObject>=3.42
+
+# Not pip-installable — install these with your distro or nix:
+#   cliphist              # clipboard history store (guard + /history endpoints)
+#   wl-clipboard          # wl-copy / wl-paste on Wayland
+#   hyprland              # hyprctl, used by the launcher to float/pin the window
+#   brave | chromium      # optional: --browser mode and the latex-preview popup
